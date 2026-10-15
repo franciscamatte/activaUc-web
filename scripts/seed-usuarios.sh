@@ -38,17 +38,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${SUPABASE_DB_URL:-}" ]]; then
-  cat >&2 <<'EOF'
-Falta SUPABASE_DB_URL.
-
-  · Local:      postgresql://postgres:postgres@127.0.0.1:54322/postgres
-  · Producción: Supabase → Project Settings → Database → Connection string
-
-Esa cadena incluye la contraseña de la base: no la guardes en el repositorio.
-EOF
-  exit 1
-fi
+# La cadena de conexión se resuelve desde SUPABASE_DB_URL o .env.db
+# (ver scripts/lib/db-url.sh), para que la contraseña no quede en el
+# historial del shell ni en la lista de procesos.
+AQUI_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/db-url.sh
+source "$AQUI_SCRIPT/lib/db-url.sh"
 
 command -v psql >/dev/null || { echo "Falta psql en el PATH." >&2; exit 1; }
 
