@@ -113,20 +113,35 @@ $$;
 create policy "profiles own data" on public.profiles
 for select using (auth.uid() = id or public.is_admin(auth.uid()));
 
+create policy "profiles self insert" on public.profiles
+for insert with check (auth.uid() = id);
+
 create policy "profiles self update" on public.profiles
 for update using (auth.uid() = id) with check (auth.uid() = id);
 
 create policy "public facilities visible" on public.facilities
 for select using (true);
 
-create policy "admins manage assigned facilities" on public.facilities
-for all using (
+create policy "admins update assigned facilities" on public.facilities
+for update using (
   exists (
     select 1 from public.facility_admin_assignments faa
     where faa.facility_id = facilities.id
       and faa.admin_id = auth.uid()
   )
 ) with check (
+  exists (
+    select 1 from public.facility_admin_assignments faa
+    where faa.facility_id = facilities.id
+      and faa.admin_id = auth.uid()
+  )
+);
+
+create policy "admins insert facilities" on public.facilities
+for insert with check (public.is_admin(auth.uid()));
+
+create policy "admins delete assigned facilities" on public.facilities
+for delete using (
   exists (
     select 1 from public.facility_admin_assignments faa
     where faa.facility_id = facilities.id
@@ -171,11 +186,30 @@ for update using (
   )
 );
 
+create policy "admins manage assignments" on public.facility_admin_assignments
+for all using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
 create policy "integration events limited visibility" on public.integration_events
 for select using (
   exists (
     select 1 from public.reservations r
     where r.id = integration_events.reservation_id
+      and (
+        r.user_id = auth.uid()
+        or exists (
+          select 1 from public.facility_admin_assignments faa
+          where faa.admin_id = auth.uid() and faa.facility_id = r.facility_id
+        )
+      )
+  )
+);
+
+create policy "reservation audit visibility" on public.reservation_audit_log
+for select using (
+  exists (
+    select 1 from public.reservations r
+    where r.id = reservation_audit_log.reservation_id
       and (
         r.user_id = auth.uid()
         or exists (
