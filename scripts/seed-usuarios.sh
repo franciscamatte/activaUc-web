@@ -86,11 +86,21 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=on \
   -v correo="$CORREO" -v recinto="${RECINTO:-}" -v todos="$TODOS" <<'SQL'
 begin;
 
+-- psql NO interpola sus variables dentro de un bloque dollar-quoted
+-- ($$ ... $$): allí «:'correo'» llegaría literal y produciría un error
+-- de sintaxis. Por eso los valores se pasan primero a parámetros de
+-- configuración, que sí se interpolan aquí fuera, y el bloque los lee
+-- con current_setting(). El tercer argumento `true` los hace locales a
+-- la transacción, de modo que no persisten en la sesión.
+select set_config('activauc.correo',  :'correo',  true);
+select set_config('activauc.recinto', :'recinto', true);
+select set_config('activauc.todos',   :'todos',   true);
+
 do $$
 declare
-  _correo  text := :'correo';
-  _recinto text := nullif(:'recinto', '');
-  _todos   boolean := (:'todos' = '1');
+  _correo  text := current_setting('activauc.correo');
+  _recinto text := nullif(current_setting('activauc.recinto'), '');
+  _todos   boolean := (current_setting('activauc.todos') = '1');
   _uid     uuid;
   _n       int;
 begin

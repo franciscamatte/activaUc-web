@@ -23,6 +23,7 @@ _activauc_leer_env_db() {
   local clave="$1"
   [ -f "$ACTIVAUC_RAIZ/.env.db" ] || return 0
   grep -E "^[[:space:]]*${clave}[[:space:]]*=" "$ACTIVAUC_RAIZ/.env.db" 2>/dev/null |
+    tr -d '' |
     tail -1 |
     sed -E "s/^[[:space:]]*${clave}[[:space:]]*=[[:space:]]*//" |
     sed -E 's/^"(.*)"$/\1/' |
