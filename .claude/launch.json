@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "wsl",
+      "runtimeArgs": [
+        "-d",
+        "Ubuntu-24.04",
+        "--",
+        "bash",
+        "/mnt/c/Users/nicol/Downloads/activaUc-web/scripts/dev-wsl.sh"
+      ],
+      "port": 5173
+    }
+  ]
+}

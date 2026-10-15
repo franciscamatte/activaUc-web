@@ -46,6 +46,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
+    // Cuando el servidor corre dentro de WSL pero los archivos están en
+    // /mnt/c, inotify no entrega eventos de cambio y el recargado en
+    // caliente se queda mudo. Con VITE_USE_POLLING=true se sondea, que
+    // consume algo más de CPU pero sí detecta las ediciones.
+    watch: process.env.VITE_USE_POLLING === "true"
+      ? { usePolling: true, interval: 300 }
+      : undefined,
   },
   preview: {
     port: 4173,
