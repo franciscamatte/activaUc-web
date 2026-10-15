@@ -4,7 +4,7 @@ export type EstadoReserva = "vigente" | "cancelada" | "pasada";
 
 export type EstadoSincronizacion = "sincronizado" | "pendiente" | "error";
 
-export type EstadoMensaje = "enviado" | "entregado" | "fallido" | "omitido";
+export type EstadoMensaje = "enviado" | "entregado" | "fallido" | "omitido" | "pendiente";
 
 export interface Usuario {
   id: string;

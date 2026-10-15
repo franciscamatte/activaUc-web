@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { formatDateTime } from "../lib/date";
 import { useAppState } from "../state/AppProvider";
 

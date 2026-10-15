@@ -1,4 +1,5 @@
-import type { ActivaRepository } from "./repository";
+import type { Bloque, FiltrosCatalogo, Recinto, Usuario } from "../domain/types";
+import type { ActivaRepository, AppSnapshot } from "./repository";
 
 export class SupabaseRepositoryNotConfigured implements ActivaRepository {
   private error(): never {
@@ -7,16 +8,16 @@ export class SupabaseRepositoryNotConfigured implements ActivaRepository {
     );
   }
 
-  async getSnapshot() { this.error(); }
-  async login() { this.error(); }
-  async register() { this.error(); }
-  async recoverPassword() { this.error(); }
-  async logout() { this.error(); }
-  async saveProfile() { this.error(); }
-  async getBloquesFiltrados() { this.error(); }
-  async reservar() { this.error(); }
-  async cancelarReservaComoUsuario() { this.error(); }
-  async cancelarReservaComoAdmin() { this.error(); }
-  async saveRecinto() { this.error(); }
-  async saveBloque() { this.error(); }
+  async getSnapshot(): Promise<AppSnapshot> { return this.error(); }
+  async login(_email: string, _password: string): Promise<void> { return this.error(); }
+  async register(_nombre: string, _email: string, _password: string): Promise<void> { return this.error(); }
+  async recoverPassword(_email: string): Promise<void> { return this.error(); }
+  async logout(): Promise<void> { return this.error(); }
+  async saveProfile(_data: Partial<Usuario>): Promise<void> { return this.error(); }
+  async getBloquesFiltrados(_filters: FiltrosCatalogo): Promise<Bloque[]> { return this.error(); }
+  async reservar(_bloqueId: string): Promise<void> { return this.error(); }
+  async cancelarReservaComoUsuario(_reservaId: string): Promise<void> { return this.error(); }
+  async cancelarReservaComoAdmin(_reservaId: string): Promise<void> { return this.error(); }
+  async saveRecinto(_recinto: Omit<Recinto, "id"> & { id?: string }): Promise<void> { return this.error(); }
+  async saveBloque(_bloque: Omit<Bloque, "id"> & { id?: string }): Promise<void> { return this.error(); }
 }

@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Bloque, FiltrosCatalogo } from "../domain/types";
 import { formatDateTime } from "../lib/date";
