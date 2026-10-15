@@ -1,62 +1,58 @@
-# ActivaUC
+# ActivaUC Web
 
-Plataforma web para la reserva de espacios deportivos. Permite consultar los recintos disponibles, ver sus bloques horarios con los cupos que quedan y revisar las reservas de cada usuario.
+SPA en React + TypeScript para reservas de espacios deportivos de Deportes UC, basada en el documento `2.1 Documento de requerimientos de software (1)`.
 
-> Estado actual: primeras vistas con datos de prueba. Todavía no hay backend, usuarios ni lógica de reservas.
+## Estado
+Implementación funcional con:
+- Autenticación (login, registro, recuperación).
+- Catálogo con filtros por fecha/tipo/horario.
+- Reserva en hasta 4 pasos con validaciones de capacidad y duplicados.
+- Mis reservas (vigentes / históricas) y cancelación con regla de 2 horas.
+- Datos personales con consentimiento WhatsApp y conexión opcional Google Calendar.
+- Panel administrador protegido por rol y recintos asignados.
+- Arquitectura mock local lista para reemplazo por Supabase.
+- Migraciones SQL de Supabase con RLS y función transaccional anti-sobrecupo.
 
 ## Tecnologías
+- React 19 + TypeScript + React Router
+- TailwindCSS 4
+- ESLint
+- Vitest (tests unitarios)
 
-- [React](https://react.dev) 19 con TypeScript
-- [Vite](https://vite.dev) como herramienta de desarrollo y build
-- [React Router](https://reactrouter.com) para la navegación
-- [Tailwind CSS](https://tailwindcss.com) para los estilos
-- React Compiler habilitado
-- ESLint para el análisis estático del código
+## Configuración
+Copiar variables de entorno:
+```bash
+cp .env.example .env
+```
 
-## Cómo ejecutarlo
+Variables:
+- `VITE_DATA_MODE=mock` (por defecto) usa adaptador local.
+- `VITE_DATA_MODE=supabase` deja listo el contrato para backend Supabase.
 
-Requiere [Node.js](https://nodejs.org) y [Yarn](https://yarnpkg.com).
-
+## Ejecutar
 ```bash
 yarn install
 yarn dev
 ```
 
-La aplicación queda disponible en `http://localhost:5173`.
-
-## Scripts
-
-| Comando        | Qué hace                                  |
-| -------------- | ----------------------------------------- |
-| `yarn dev`     | Inicia el servidor de desarrollo          |
-| `yarn build`   | Revisa los tipos y genera la versión final |
-| `yarn preview` | Sirve la versión generada para probarla   |
-| `yarn lint`    | Ejecuta ESLint                            |
-
-## Vistas
-
-- **Recintos** (`/recintos`): lista de recintos con su información general. Al elegir uno se muestran sus bloques horarios, los cupos disponibles y un botón "Reservar" (todavía sin funcionamiento).
-- **Mis reservas** (`/mis-reservas`): reservas del usuario separadas en dos pestañas, "Vigentes" y "Pasadas".
-
-## Estructura del proyecto
-
-```
-src/
-├── components/   Componentes reutilizables (Navbar)
-├── data/         Datos de prueba (mock.ts)
-├── pages/        Una página por vista
-├── App.tsx       Define las rutas
-├── main.tsx      Punto de entrada de la aplicación
-└── index.css     Estilos globales y Tailwind
+## Validaciones
+```bash
+yarn lint
+yarn build
+yarn test
 ```
 
-## Datos de prueba
+## Supabase
+Migración principal: `supabase/migrations/20261015133000_activauc_schema.sql`
 
-Los recintos, bloques y reservas están definidos en `src/data/mock.ts`. Cuando exista el backend, ese archivo se reemplaza por datos reales sin cambiar la forma de las vistas.
+Incluye:
+- tablas de dominio
+- índices
+- restricciones
+- políticas RLS
+- función `create_reservation_strict` con control transaccional de concurrencia
 
-## Próximos pasos
-
-- Registro e inicio de sesión de usuarios
-- Creación y cancelación de reservas
-- Integración con Google Calendar y notificaciones por WhatsApp
-- Panel de administración de recintos y bloques
+## Documentación adicional
+- `docs/guia-uso.md`
+- `docs/despliegue-s3-cloudfront.md`
+- `docs/pruebas-concurrencia.md`

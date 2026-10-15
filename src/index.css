@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+}
+
 body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   background-color: #f8fafc;
   color: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
 }

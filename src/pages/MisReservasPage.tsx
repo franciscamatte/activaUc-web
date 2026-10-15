@@ -1,64 +1,51 @@
-import { useState } from "react";
-import { reservas } from "../data/mock";
-import type { Reserva } from "../data/mock";
-
-type Pestana = Reserva["estado"];
-
-const pestanas: { id: Pestana; nombre: string }[] = [
-  { id: "vigente", nombre: "Vigentes" },
-  { id: "pasada", nombre: "Pasadas" },
-];
-
-function ReservaList({ items }: { items: Reserva[] }) {
-  if (items.length === 0) {
-    return <p className="mt-6 text-sm text-slate-500">No hay reservas.</p>;
-  }
-
-  return (
-    <ul className="mt-6 space-y-3">
-      {items.map((reserva) => (
-        <li
-          key={reserva.id}
-          className="rounded-xl border border-slate-200 bg-white p-4"
-        >
-          <p className="font-semibold">{reserva.recinto}</p>
-          <p className="text-sm text-slate-600">
-            {reserva.fecha} · {reserva.bloque}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
-}
+import { useMemo, useState } from "react";
+import { formatDateTime } from "../lib/date";
+import { splitReservations, useAppState } from "../state/AppProvider";
 
 export default function MisReservasPage() {
-  const [pestana, setPestana] = useState<Pestana>("vigente");
-  const items = reservas.filter((r) => r.estado === pestana);
+  const { snapshot, currentUser, cancelarUsuario, error } = useAppState();
+  const [tab, setTab] = useState<"vigentes" | "pasadas">("vigentes");
+
+  const grouped = useMemo(() => {
+    const own =
+      snapshot?.reservas.filter((r) => r.usuarioId === currentUser?.id) ?? [];
+    return splitReservations(own);
+  }, [snapshot?.reservas, currentUser?.id]);
+
+  const recintosById = useMemo(
+    () => new Map(snapshot?.recintos.map((r) => [r.id, r.nombre]) ?? []),
+    [snapshot?.recintos],
+  );
+
+  const items = tab === "vigentes" ? grouped.vigentes : grouped.pasadas;
 
   return (
-    <section>
+    <section className="space-y-4">
       <h1 className="text-2xl font-bold">Mis reservas</h1>
-
-      <div role="tablist" className="mt-6 flex gap-1 border-b border-slate-200">
-        {pestanas.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            role="tab"
-            aria-selected={pestana === p.id}
-            onClick={() => setPestana(p.id)}
-            className={
-              pestana === p.id
-                ? "-mb-px border-b-2 border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-700"
-                : "-mb-px border-b-2 border-transparent px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-            }
-          >
-            {p.nombre}
-          </button>
-        ))}
+      <div className="flex gap-2 border-b border-slate-200">
+        <button type="button" onClick={() => setTab("vigentes")} className={tab === "vigentes" ? "border-b-2 border-emerald-600 px-3 py-2 font-semibold text-emerald-700" : "px-3 py-2 text-slate-500"}>Vigentes</button>
+        <button type="button" onClick={() => setTab("pasadas")} className={tab === "pasadas" ? "border-b-2 border-emerald-600 px-3 py-2 font-semibold text-emerald-700" : "px-3 py-2 text-slate-500"}>Reservas pasadas</button>
       </div>
-
-      <ReservaList items={items} />
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <ul className="space-y-3">
+        {items.map((reserva) => (
+          <li key={reserva.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="font-semibold">{recintosById.get(reserva.recintoId)}</p>
+            <p className="text-sm text-slate-600">{formatDateTime(reserva.inicio)} - {formatDateTime(reserva.fin)}</p>
+            <p className="text-xs text-slate-500">Calendar: {reserva.calendarSync} · WhatsApp: {reserva.whatsappConfirmacion}</p>
+            {tab === "vigentes" ? (
+              <button
+                type="button"
+                onClick={() => void cancelarUsuario(reserva.id)}
+                className="mt-3 rounded-md border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+              >
+                Cancelar reserva
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {items.length === 0 ? <p className="text-sm text-slate-500">No hay reservas en esta sección.</p> : null}
     </section>
   );
 }
