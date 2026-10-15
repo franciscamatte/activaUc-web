@@ -1,16 +1,63 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   ActivaUC · estilos base
+   ---------------------------------------------------------------------
+   El estilo de marca se define aquí y se consume con las utilidades de
+   Tailwind, para que todas las pantallas compartan tipografía, colores
+   e indicadores de foco.
+   ===================================================================== */
+
 :root {
   color-scheme: light;
+  --activauc-verde: #047857;      /* emerald-700 */
+  --activauc-verde-oscuro: #065f46;
+  --activauc-texto: #0f172a;      /* slate-900 */
+  --activauc-fondo: #f8fafc;      /* slate-50 */
+}
+
+html {
+  /* Deja aire al navegar con los enlaces de ancla de la propia página. */
+  scroll-padding-top: 5rem;
 }
 
 body {
   margin: 0;
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  min-height: 100vh;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  background-color: var(--activauc-fondo);
+  color: var(--activauc-texto);
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+/* Foco visible y consistente para navegación con teclado. */
+:focus-visible {
+  outline: 2px solid var(--activauc-verde);
+  outline-offset: 2px;
+}
+
+/* Respeta la preferencia del sistema de reducir movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Alto contraste: refuerza los bordes para que no desaparezcan. */
+@media (prefers-contrast: more) {
+  .border-slate-200 {
+    border-color: #475569;
+  }
 }

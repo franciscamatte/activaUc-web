@@ -1,4 +1,46 @@
-# Logs
+# =====================================================================
+# ActivaUC · archivos que nunca deben entrar al repositorio
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# Secretos y configuración local
+# ---------------------------------------------------------------------
+# Se versionan únicamente los ejemplos (.env.example, .env.secrets.example).
+.env
+.env.*
+!.env.example
+!.env.secrets.example
+
+# Credenciales y claves sueltas
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials.json
+service-account*.json
+client_secret*.json
+
+# ---------------------------------------------------------------------
+# Dependencias y artefactos de compilación
+# ---------------------------------------------------------------------
+node_modules
+dist
+dist-ssr
+build
+coverage
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------
+# Supabase CLI
+# ---------------------------------------------------------------------
+supabase/.temp/
+supabase/.branches/
+.branches/
+
+# ---------------------------------------------------------------------
+# Registros
+# ---------------------------------------------------------------------
 logs
 *.log
 npm-debug.log*
@@ -7,19 +49,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# ---------------------------------------------------------------------
+# Editores y sistema operativo
+# ---------------------------------------------------------------------
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-node_modules
+*.local

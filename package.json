@@ -1,15 +1,32 @@
 {
   "name": "activauc",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "ActivaUC · plataforma web de reserva de espacios deportivos de Deportes UC",
   "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
     "preview": "vite preview",
+    "typecheck": "tsc -b --force",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:db": "node scripts/db-test.mjs",
+    "test:concurrency": "node scripts/concurrency-test.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:diff": "supabase db diff",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "bash scripts/deploy-functions.sh",
+    "secrets:set": "bash scripts/set-secrets.sh",
+    "deploy:frontend": "bash scripts/deploy-frontend.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -24,6 +41,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
@@ -32,6 +50,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
+    "pg": "^8.16.3",
+    "supabase": "^2.56.3",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.69.0",

@@ -1,23 +1,41 @@
 import type { ReactElement } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import type { Rol } from "../domain/types";
-import { useAppState } from "../state/AppProvider";
+import { useAuth } from "../state/authContext";
+import { Cargando } from "./ui/Estados";
 
+/**
+ * Guardia de rutas por sesión y rol.
+ *
+ * Es una conveniencia de interfaz, no un control de seguridad: quien
+ * manipule el enrutador del navegador no obtiene ningún dato, porque
+ * RLS y las funciones del backend son las que autorizan cada operación.
+ */
 export default function ProtectedRoute({
   children,
-  role,
+  rol,
 }: {
   children: ReactElement;
-  role?: Rol;
+  rol?: "administrador";
 }) {
-  const { currentUser } = useAppState();
-  const location = useLocation();
+  const { fase, perfil } = useAuth();
+  const ubicacion = useLocation();
 
-  if (!currentUser) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (fase === "cargando") {
+    return <Cargando texto="Verificando tu sesión…" />;
   }
-  if (role && currentUser.rol !== role) {
-    return <Navigate to="/catalogo" replace />;
+
+  if (!perfil) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ destino: ubicacion.pathname + ubicacion.search }}
+      />
+    );
+  }
+
+  if (rol === "administrador" && perfil.rol !== "administrador") {
+    return <Navigate to="/catalogo" replace state={{ sinPermiso: true }} />;
   }
 
   return children;

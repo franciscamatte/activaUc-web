@@ -1,0 +1,32 @@
+# =====================================================================
+# ActivaUC · normalización de fin de línea
+# ---------------------------------------------------------------------
+# Los scripts de shell y el SQL que ejecuta psql DEBEN usar LF: con CRLF,
+# bash falla con «$'\r': command not found» en Linux y en integración
+# continua, aunque funcionen al editarlos desde Windows.
+# =====================================================================
+
+# Detección automática para el texto en general.
+* text=auto eol=lf
+
+# Archivos que se ejecutan en Linux: LF obligatorio.
+*.sh    text eol=lf
+*.sql   text eol=lf
+*.mjs   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+
+# Binarios: sin conversión.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary

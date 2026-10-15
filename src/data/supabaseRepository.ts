@@ -1,455 +1,736 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { canUserCancelReservation } from "../domain/reservationRules";
+/**
+ * Implementación real del acceso a datos sobre Supabase.
+ *
+ * Principios aplicados:
+ *   · Las escrituras de reservas nunca son UPDATE/INSERT directos: van
+ *     por create_reservation_strict y cancel_reservation, que son
+ *     transaccionales y validan identidad y rol en el servidor.
+ *   · La disponibilidad pública se lee de la vista block_availability,
+ *     que sólo expone agregados.
+ *   · Las integraciones (OAuth de Google, WhatsApp) se operan mediante
+ *     Edge Functions; el navegador nunca ve una credencial externa.
+ */
+
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
+import { AppError, aAppError } from "../lib/errors";
+import { conReintentos } from "../lib/retry";
+import { config } from "../lib/env";
+import { invocarFuncion } from "../lib/supabase";
+import { dentroDelRangoHorario } from "../domain/reservationRules";
+import { normalizarTelefono } from "../domain/phone";
 import type {
-  AsignacionAdministrador,
-  AuditoriaReserva,
   Bloque,
+  ConexionCalendario,
+  Disponibilidad,
+  EntradaAuditoria,
+  EstadoSincronizacion,
   FiltrosCatalogo,
+  IncidenciaIntegracion,
+  Perfil,
   Recinto,
   Reserva,
-  Sesion,
-  Usuario,
+  ReservaAdmin,
+  ResultadoCancelacion,
+  ResultadoReserva,
+  Rol,
 } from "../domain/types";
-import { toTimeValue } from "../lib/date";
-import type { ActivaRepository, AppSnapshot } from "./repository";
+import type {
+  ActivaRepository,
+  DatosBloque,
+  DatosRecinto,
+  OyenteSesion,
+  SesionActual,
+} from "./repository";
+import {
+  aAuditoria,
+  aBloque,
+  aConexionCalendario,
+  aDisponibilidad,
+  aIncidencia,
+  aPerfil,
+  aRecinto,
+  aReserva,
+  aReservaAdmin,
+  type FilaAuditoria,
+  type FilaBloque,
+  type FilaConexionCalendario,
+  type FilaDisponibilidad,
+  type FilaIncidencia,
+  type FilaPerfil,
+  type FilaRecinto,
+  type FilaReserva,
+  type FilaReservaAdmin,
+} from "./rows";
 
-interface ProfileRow {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  whatsapp_consent: boolean;
-  google_calendar_connected: boolean;
-  role: "usuario" | "administrador";
+/** Respuesta cruda de create_reservation_strict. */
+interface RespuestaCrearReserva {
+  ok: boolean;
+  duplicada?: boolean;
+  reservation_id?: string;
+  error?: string;
+  mensaje: string;
+  calendar_sync_status?: EstadoSincronizacion;
+  whatsapp_confirmacion?: string;
+  whatsapp_recordatorio?: string;
+  recordatorio_programado_para?: string | null;
+  cupos_disponibles?: number;
 }
 
-interface FacilityRow {
-  id: string;
-  name: string;
-  facility_type: string;
-  description: string;
-  operation_hours: string;
-  active: boolean;
-}
-
-interface BlockRow {
-  id: string;
-  facility_id: string;
-  starts_at: string;
-  ends_at: string;
-  max_capacity: number;
-  active: boolean;
-}
-
-interface ReservationRow {
-  id: string;
-  user_id: string;
-  facility_id: string;
-  block_id: string;
-  starts_at: string;
-  ends_at: string;
-  status: "vigente" | "cancelada" | "pasada";
-  created_at: string;
-  calendar_sync_status: "sincronizado" | "pendiente" | "error";
-  whatsapp_confirmation_status:
-    | "enviado"
-    | "entregado"
-    | "fallido"
-    | "omitido"
-    | "pendiente";
-  whatsapp_reminder_status:
-    | "enviado"
-    | "entregado"
-    | "fallido"
-    | "omitido"
-    | "pendiente";
-}
-
-function mapProfile(row: ProfileRow, email = ""): Usuario {
-  return {
-    id: row.id,
-    nombre: row.full_name,
-    email,
-    password: "",
-    telefono: row.phone ?? "",
-    whatsappConsentido: row.whatsapp_consent,
-    googleCalendarConectado: row.google_calendar_connected,
-    rol: row.role,
-  };
-}
-
-function mapFacility(row: FacilityRow): Recinto {
-  return {
-    id: row.id,
-    nombre: row.name,
-    tipo: row.facility_type,
-    descripcion: row.description,
-    horarioFuncionamiento: row.operation_hours,
-    activo: row.active,
-  };
-}
-
-function mapBlock(row: BlockRow): Bloque {
-  return {
-    id: row.id,
-    recintoId: row.facility_id,
-    inicio: row.starts_at,
-    fin: row.ends_at,
-    capacidadMaxima: row.max_capacity,
-    activo: row.active,
-  };
-}
-
-function mapReservation(row: ReservationRow): Reserva {
-  return {
-    id: row.id,
-    usuarioId: row.user_id,
-    recintoId: row.facility_id,
-    bloqueId: row.block_id,
-    inicio: row.starts_at,
-    fin: row.ends_at,
-    estado: row.status,
-    creadaEn: row.created_at,
-    calendarSync: row.calendar_sync_status,
-    whatsappConfirmacion: row.whatsapp_confirmation_status,
-    whatsappRecordatorio: row.whatsapp_reminder_status,
-  };
+/** Respuesta cruda de cancel_reservation. */
+interface RespuestaCancelar {
+  ok: boolean;
+  ya_cancelada?: boolean;
+  error?: string;
+  mensaje: string;
+  cancelado_por?: Rol;
+  notificacion_whatsapp?: boolean;
 }
 
 export class SupabaseRepository implements ActivaRepository {
-  constructor(private readonly client: SupabaseClient) {}
+  // Campo explícito en lugar de una propiedad de parámetro, porque el
+  // proyecto compila con erasableSyntaxOnly (sin sintaxis que requiera
+  // transformación en tiempo de ejecución).
+  private readonly cliente: SupabaseClient;
 
-  private async getCurrentSession(): Promise<Sesion | null> {
-    const { data } = await this.client.auth.getSession();
-    if (!data.session?.user) {
-      return null;
-    }
+  constructor(cliente: SupabaseClient) {
+    this.cliente = cliente;
+  }
 
-    const { data: profile, error } = await this.client
-      .from("profiles")
-      .select("role")
-      .eq("id", data.session.user.id)
-      .single();
+  // =================================================================
+  // Sesión
+  // =================================================================
 
-    if (error || !profile) {
-      return { usuarioId: data.session.user.id, rol: "usuario" };
-    }
+  async obtenerSesion(): Promise<SesionActual | null> {
+    const { data, error } = await this.cliente.auth.getSession();
+    if (error) throw aAppError(error, "recuperar la sesión");
+    if (!data.session?.user) return null;
 
     return {
       usuarioId: data.session.user.id,
-      rol: profile.role,
+      correo: data.session.user.email ?? "",
+      expiraEn: data.session.expires_at ?? null,
     };
   }
 
-  private async getCurrentUserId(): Promise<string> {
-    const { data } = await this.client.auth.getUser();
-    if (!data.user) {
-      throw new Error("Debes iniciar sesión.");
-    }
-    return data.user.id;
+  escucharSesion(oyente: OyenteSesion): () => void {
+    const { data } = this.cliente.auth.onAuthStateChange((evento, sesion) => {
+      const actual: SesionActual | null = sesion?.user
+        ? {
+          usuarioId: sesion.user.id,
+          correo: sesion.user.email ?? "",
+          expiraEn: sesion.expires_at ?? null,
+        }
+        : null;
+
+      switch (evento) {
+        case "SIGNED_IN":
+        case "INITIAL_SESSION":
+          if (actual) oyente("iniciada", actual);
+          break;
+        case "TOKEN_REFRESHED":
+          oyente("renovada", actual);
+          break;
+        case "USER_UPDATED":
+          oyente("renovada", actual);
+          break;
+        case "SIGNED_OUT":
+          oyente("cerrada", null);
+          break;
+        default:
+          break;
+      }
+    });
+
+    return () => data.subscription.unsubscribe();
   }
 
-  async getSnapshot(): Promise<AppSnapshot> {
-    const sesion = await this.getCurrentSession();
-
-    const [facilitiesRes, blocksRes, reservationsRes] = await Promise.all([
-      this.client.from("facilities").select("*").order("name", { ascending: true }),
-      this.client.from("time_blocks").select("*").order("starts_at", { ascending: true }),
-      this.client
-        .from("reservations")
-        .select("*")
-        .order("starts_at", { ascending: false }),
-    ]);
-
-    if (facilitiesRes.error) {
-      throw new Error(facilitiesRes.error.message);
+  async registrarse(datos: {
+    nombre: string;
+    correo: string;
+    contrasena: string;
+  }): Promise<{ requiereConfirmacion: boolean }> {
+    if (datos.contrasena.length < 8) {
+      throw new AppError("contrasena_debil", "La contraseña debe tener al menos 8 caracteres.");
     }
-    if (blocksRes.error) {
-      throw new Error(blocksRes.error.message);
-    }
-    if (reservationsRes.error) {
-      throw new Error(reservationsRes.error.message);
+    if (datos.nombre.trim().length < 2) {
+      throw new AppError("conflicto", "Ingresa tu nombre completo.");
     }
 
-    const recintos = (facilitiesRes.data as FacilityRow[]).map(mapFacility);
-    const bloques = (blocksRes.data as BlockRow[]).map(mapBlock);
-    const reservas = (reservationsRes.data as ReservationRow[]).map(mapReservation);
+    const { data, error } = await this.cliente.auth.signUp({
+      email: datos.correo.trim().toLowerCase(),
+      password: datos.contrasena,
+      options: {
+        // El perfil lo crea el disparador on_auth_user_created leyendo
+        // este metadato; el cliente no escribe en public.profiles.
+        data: { full_name: datos.nombre.trim() },
+        emailRedirectTo: `${config.appUrl}/auth/callback`,
+      },
+    });
 
-    let usuarios: Usuario[] = [];
-    let asignaciones: AsignacionAdministrador[] = [];
-    let auditoria: AuditoriaReserva[] = [];
+    if (error) throw aAppError(error, "crear la cuenta");
 
-    if (sesion) {
-      const [{ data: profiles }, { data: assignments }, { data: logs }] = await Promise.all([
-        this.client
-          .from("profiles")
-          .select("id, full_name, phone, whatsapp_consent, google_calendar_connected, role"),
-        this.client.from("facility_admin_assignments").select("*").eq("admin_id", sesion.usuarioId),
-        this.client
-          .from("reservation_audit_log")
-          .select("id, reservation_id, action, actor_id, details, created_at")
-          .order("created_at", { ascending: false })
-          .limit(200),
-      ]);
-
-      const { data: authUser } = await this.client.auth.getUser();
-
-      usuarios = (profiles ?? []).map((profile) =>
-        mapProfile(profile as ProfileRow, profile.id === authUser.user?.id ? authUser.user.email ?? "" : ""),
+    // Supabase devuelve un usuario sin sesión cuando la confirmación de
+    // correo está activada. Si además devuelve identities vacío, el
+    // correo ya existía (no lo revela por seguridad, pero lo deducimos).
+    if (data.user && data.user.identities?.length === 0) {
+      throw new AppError(
+        "correo_en_uso",
+        "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.",
       );
+    }
 
-      asignaciones = (assignments ?? []).map((a) => ({
-        id: a.id,
-        administradorId: a.admin_id,
-        recintoId: a.facility_id,
-      }));
+    return { requiereConfirmacion: data.session === null };
+  }
 
-      auditoria = (logs ?? []).map((log) => ({
-        id: log.id,
-        reservaId: log.reservation_id,
-        accion: log.action,
-        actorId: log.actor_id,
-        detalle: log.details ?? "",
-        fecha: log.created_at,
-      }));
+  async iniciarSesion(correo: string, contrasena: string): Promise<void> {
+    const { error } = await this.cliente.auth.signInWithPassword({
+      email: correo.trim().toLowerCase(),
+      password: contrasena,
+    });
+    if (error) throw aAppError(error, "iniciar sesión");
+  }
+
+  async cerrarSesion(): Promise<void> {
+    const { error } = await this.cliente.auth.signOut();
+    // Si la sesión ya no existía en el servidor, el cierre local basta.
+    if (error && !/session|not found/i.test(error.message)) {
+      throw aAppError(error, "cerrar sesión");
+    }
+  }
+
+  async solicitarRecuperacion(correo: string): Promise<void> {
+    const { error } = await this.cliente.auth.resetPasswordForEmail(
+      correo.trim().toLowerCase(),
+      { redirectTo: `${config.appUrl}/restablecer-contrasena` },
+    );
+    if (error) throw aAppError(error, "solicitar la recuperación");
+  }
+
+  async definirNuevaContrasena(contrasena: string): Promise<void> {
+    if (contrasena.length < 8) {
+      throw new AppError("contrasena_debil", "La contraseña debe tener al menos 8 caracteres.");
+    }
+    const { error } = await this.cliente.auth.updateUser({ password: contrasena });
+    if (error) throw aAppError(error, "actualizar la contraseña");
+  }
+
+  async reenviarConfirmacion(correo: string): Promise<void> {
+    const { error } = await this.cliente.auth.resend({
+      type: "signup",
+      email: correo.trim().toLowerCase(),
+      options: { emailRedirectTo: `${config.appUrl}/auth/callback` },
+    });
+    if (error) throw aAppError(error, "reenviar la confirmación");
+  }
+
+  // =================================================================
+  // Perfil
+  // =================================================================
+
+  async obtenerPerfil(): Promise<Perfil | null> {
+    const sesion = await this.obtenerSesion();
+    if (!sesion) return null;
+
+    return await conReintentos(async () => {
+      const { data, error } = await this.cliente
+        .from("profiles")
+        .select("id, full_name, phone, whatsapp_consent, whatsapp_consent_at, role")
+        .eq("id", sesion.usuarioId)
+        .maybeSingle<FilaPerfil>();
+
+      if (error) throw aAppError(error, "cargar tu perfil");
+      if (!data) {
+        // El disparador crea el perfil al confirmarse el registro; si
+        // todavía no existe, lo informamos sin inventar datos.
+        throw new AppError(
+          "no_encontrado",
+          "Tu perfil aún se está creando. Recarga la página en unos segundos.",
+          true,
+        );
+      }
+      return aPerfil(data, sesion.correo);
+    });
+  }
+
+  async actualizarNombre(nombre: string): Promise<void> {
+    const limpio = nombre.trim();
+    if (limpio.length < 2 || limpio.length > 120) {
+      throw new AppError("conflicto", "El nombre debe tener entre 2 y 120 caracteres.");
+    }
+
+    const sesion = await this.exigirSesion();
+    const { error } = await this.cliente
+      .from("profiles")
+      .update({ full_name: limpio })
+      .eq("id", sesion.usuarioId);
+
+    if (error) throw aAppError(error, "guardar tu nombre");
+  }
+
+  async definirConsentimientoWhatsapp(
+    telefono: string | null,
+    consentido: boolean,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("set_whatsapp_consent", {
+      _phone: consentido ? normalizarTelefono(telefono ?? "") : null,
+      _consent: consentido,
+    });
+
+    if (error) throw aAppError(error, "guardar tus preferencias de WhatsApp");
+
+    const respuesta = data as { ok: boolean; mensaje?: string; error?: string };
+    if (!respuesta.ok) {
+      return {
+        ok: false,
+        mensaje: respuesta.mensaje ?? "No pudimos guardar tus preferencias de WhatsApp.",
+      };
     }
 
     return {
-      usuarios,
-      recintos,
-      bloques,
-      reservas,
-      asignaciones,
-      auditoria,
-      sesion,
+      ok: true,
+      mensaje: consentido
+        ? "Registramos tu número. Recibirás confirmaciones y recordatorios por WhatsApp."
+        : "Eliminamos tu número y revocamos el consentimiento. No recibirás más mensajes.",
     };
   }
 
-  async login(email: string, password: string): Promise<void> {
-    const { error } = await this.client.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (error.message.toLowerCase().includes("invalid login")) {
-        throw new Error("Correo o contraseña inválidos.");
-      }
-      throw new Error(error.message);
-    }
-  }
+  // =================================================================
+  // Catálogo y disponibilidad
+  // =================================================================
 
-  async register(nombre: string, email: string, password: string): Promise<void> {
-    if (password.length < 8) {
-      throw new Error("La contraseña debe tener al menos 8 caracteres.");
-    }
+  async listarRecintos(): Promise<Recinto[]> {
+    return await conReintentos(async () => {
+      const { data, error } = await this.cliente
+        .from("facilities")
+        .select("id, name, facility_type, description, operation_hours, active")
+        .eq("active", true)
+        .order("name", { ascending: true });
 
-    const { data, error } = await this.client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: nombre,
-        },
-      },
+      if (error) throw aAppError(error, "cargar los recintos");
+      return (data as FilaRecinto[]).map(aRecinto);
     });
+  }
 
-    if (error) {
-      throw new Error(error.message);
-    }
+  /**
+   * REQ-9, REQ-10, REQ-11 · disponibilidad con filtros.
+   *
+   * Fecha, tipo de recinto y recinto se filtran en PostgreSQL. El rango
+   * horario se aplica en el cliente porque depende de la zona horaria de
+   * presentación y la vista almacena instantes en UTC.
+   */
+  async consultarDisponibilidad(filtros: FiltrosCatalogo): Promise<Disponibilidad[]> {
+    return await conReintentos(async () => {
+      let consulta = this.cliente
+        .from("block_availability")
+        .select(
+          "block_id, facility_id, facility_name, facility_type, facility_description, " +
+          "facility_operation_hours, starts_at, ends_at, max_capacity, reserved_count, " +
+          "available_count, is_full, is_past",
+        )
+        .order("starts_at", { ascending: true })
+        .limit(500);
 
-    if (data.user) {
-      const { error: profileError } = await this.client.from("profiles").upsert(
-        {
-          id: data.user.id,
-          full_name: nombre,
-          role: "usuario",
-        },
-        { onConflict: "id" },
-      );
-      if (profileError) {
-        throw new Error(profileError.message);
+      if (filtros.tipoRecinto) {
+        consulta = consulta.eq("facility_type", filtros.tipoRecinto);
       }
-    }
-  }
+      if (filtros.recintoId) {
+        consulta = consulta.eq("facility_id", filtros.recintoId);
+      }
 
-  async recoverPassword(email: string): Promise<void> {
-    const { error } = await this.client.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
+      if (filtros.fechaDesde) {
+        consulta = consulta.gte("starts_at", inicioDelDia(filtros.fechaDesde));
+        const hasta = filtros.fechaHasta || filtros.fechaDesde;
+        consulta = consulta.lte("starts_at", finDelDia(hasta));
+      } else {
+        // Sin filtro de fecha se muestran los bloques que aún no empiezan.
+        consulta = consulta.gte("starts_at", new Date().toISOString());
+      }
+
+      const { data, error } = await consulta;
+      if (error) throw aAppError(error, "consultar la disponibilidad");
+
+      let bloques = ((data ?? []) as unknown as FilaDisponibilidad[]).map(aDisponibilidad);
+
+      if (filtros.horaDesde || filtros.horaHasta) {
+        bloques = bloques.filter((b) =>
+          dentroDelRangoHorario(b, filtros.horaDesde, filtros.horaHasta, config.timeZone),
+        );
+      }
+      if (filtros.soloConCupos) {
+        bloques = bloques.filter((b) => !b.agotado && !b.iniciado);
+      }
+
+      return bloques;
     });
-    if (error) {
-      throw new Error(error.message);
-    }
   }
 
-  async logout(): Promise<void> {
-    const { error } = await this.client.auth.signOut();
-    if (error) {
-      throw new Error(error.message);
-    }
+  /**
+   * REQ-9 · disponibilidad en vivo mediante Supabase Realtime.
+   *
+   * Se escuchan las tablas cuyos cambios alteran los cupos mostrados:
+   *   · reservations → creación y cancelación de reservas
+   *   · time_blocks  → cambios de capacidad y desactivación de bloques
+   *   · facilities   → desactivación de recintos
+   *
+   * Realtime respeta RLS, así que un visitante anónimo no recibe eventos
+   * de reservations. El llamador complementa con un refresco periódico
+   * (ver src/state/useDisponibilidad.ts).
+   */
+  observarDisponibilidad(alCambiar: () => void): () => void {
+    let canal: RealtimeChannel | null = null;
+    let cancelado = false;
+
+    // Un nombre único por suscripción evita canales duplicados cuando
+    // React monta el componente dos veces en modo estricto.
+    const nombre = `disponibilidad:${Math.random().toString(36).slice(2)}`;
+
+    canal = this.cliente
+      .channel(nombre)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, alCambiar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "time_blocks" }, alCambiar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "facilities" }, alCambiar)
+      .subscribe();
+
+    return () => {
+      if (cancelado) return;
+      cancelado = true;
+      if (canal) {
+        void this.cliente.removeChannel(canal);
+        canal = null;
+      }
+    };
   }
 
-  async saveProfile(data: Partial<Usuario>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const payload: Record<string, unknown> = {};
+  // =================================================================
+  // Reservas
+  // =================================================================
 
-    if (typeof data.nombre === "string") {
-      payload.full_name = data.nombre;
-    }
-    if (typeof data.telefono === "string") {
-      payload.phone = data.telefono;
-    }
-    if (typeof data.whatsappConsentido === "boolean") {
-      payload.whatsapp_consent = data.whatsappConsentido;
-    }
-    if (typeof data.googleCalendarConectado === "boolean") {
-      payload.google_calendar_connected = data.googleCalendarConectado;
-    }
+  async listarMisReservas(): Promise<Reserva[]> {
+    const sesion = await this.obtenerSesion();
+    if (!sesion) return [];
 
-    const { error } = await this.client.from("profiles").update(payload).eq("id", userId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    return await conReintentos(async () => {
+      const { data, error } = await this.cliente
+        .from("my_reservations")
+        .select("*")
+        .eq("user_id", sesion.usuarioId)
+        .order("starts_at", { ascending: false })
+        .limit(300);
+
+      if (error) throw aAppError(error, "cargar tus reservas");
+      return ((data ?? []) as unknown as FilaReserva[]).map(aReserva);
+    });
   }
 
-  async getBloquesFiltrados(filters: FiltrosCatalogo): Promise<Bloque[]> {
-    let query = this.client
-      .from("time_blocks")
-      .select("id, facility_id, starts_at, ends_at, max_capacity, active, facilities!inner(facility_type, active)")
-      .eq("active", true)
-      .eq("facilities.active", true)
-      .order("starts_at", { ascending: true });
+  /** REQ-12, REQ-13, REQ-16 · única vía de creación de reservas. */
+  async crearReserva(bloqueId: string, idSolicitud?: string): Promise<ResultadoReserva> {
+    await this.exigirSesion();
 
-    if (filters.tipoRecinto) {
-      query = query.eq("facilities.facility_type", filters.tipoRecinto);
-    }
-
-    if (filters.fecha) {
-      const start = new Date(`${filters.fecha}T00:00:00`).toISOString();
-      const end = new Date(`${filters.fecha}T23:59:59`).toISOString();
-      query = query.gte("starts_at", start).lte("starts_at", end);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    let blocks = (data as BlockRow[]).map(mapBlock);
-
-    if (filters.desde) {
-      const min = toTimeValue(filters.desde);
-      blocks = blocks.filter((b) => toTimeValue(new Date(b.inicio).toTimeString().slice(0, 5)) >= min);
-    }
-
-    if (filters.hasta) {
-      const max = toTimeValue(filters.hasta);
-      blocks = blocks.filter((b) => toTimeValue(new Date(b.fin).toTimeString().slice(0, 5)) <= max);
-    }
-
-    return blocks;
-  }
-
-  async reservar(bloqueId: string): Promise<void> {
-    const { error } = await this.client.rpc("create_reservation_strict", {
+    const { data, error } = await this.cliente.rpc("create_reservation_strict", {
       _block_id: bloqueId,
+      _client_request_id: idSolicitud ?? null,
     });
-    if (error) {
-      throw new Error(error.message);
-    }
-  }
 
-  async cancelarReservaComoUsuario(reservaId: string): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await this.client
-      .from("reservations")
-      .select("id, starts_at, user_id, status")
-      .eq("id", reservaId)
-      .single();
+    if (error) throw aAppError(error, "confirmar la reserva");
 
-    if (error || !data) {
-      throw new Error("No se encontró la reserva.");
-    }
-
-    if (data.user_id !== userId) {
-      throw new Error("Solo puedes cancelar tus propias reservas.");
-    }
-
-    const validation = canUserCancelReservation(data.starts_at, new Date().toISOString());
-    if (!validation.ok) {
-      throw new Error(validation.reason);
-    }
-
-    const { error: updateError } = await this.client
-      .from("reservations")
-      .update({ status: "cancelada" })
-      .eq("id", reservaId)
-      .eq("status", "vigente");
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-  }
-
-  async cancelarReservaComoAdmin(reservaId: string): Promise<void> {
-    const { error } = await this.client
-      .from("reservations")
-      .update({ status: "cancelada" })
-      .eq("id", reservaId)
-      .eq("status", "vigente");
-
-    if (error) {
-      throw new Error(error.message);
-    }
-  }
-
-  async saveRecinto(recinto: Omit<Recinto, "id"> & { id?: string }): Promise<void> {
-    const payload = {
-      name: recinto.nombre,
-      facility_type: recinto.tipo,
-      description: recinto.descripcion,
-      operation_hours: recinto.horarioFuncionamiento,
-      active: recinto.activo,
+    const r = data as RespuestaCrearReserva;
+    return {
+      ok: r.ok,
+      duplicada: r.duplicada,
+      reservaId: r.reservation_id,
+      error: r.error,
+      mensaje: r.mensaje,
+      calendarSync: r.calendar_sync_status,
+      whatsappConfirmacion: r.whatsapp_confirmacion,
+      whatsappRecordatorio: r.whatsapp_recordatorio,
+      recordatorioProgramadoPara: r.recordatorio_programado_para ?? null,
+      cuposDisponibles: r.cupos_disponibles,
     };
+  }
 
-    if (recinto.id) {
-      const { error } = await this.client.from("facilities").update(payload).eq("id", recinto.id);
-      if (error) {
-        throw new Error(error.message);
-      }
-      return;
+  /** REQ-15, REQ-32 · el backend decide según el rol real del solicitante. */
+  async cancelarReserva(reservaId: string, motivo?: string): Promise<ResultadoCancelacion> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("cancel_reservation", {
+      _reservation_id: reservaId,
+      _reason: motivo?.trim() || null,
+    });
+
+    if (error) throw aAppError(error, "cancelar la reserva");
+
+    const r = data as RespuestaCancelar;
+    return {
+      ok: r.ok,
+      yaCancelada: r.ya_cancelada,
+      error: r.error,
+      mensaje: r.mensaje,
+      canceladoPor: r.cancelado_por,
+      notificacionWhatsapp: r.notificacion_whatsapp,
+    };
+  }
+
+  // =================================================================
+  // Google Calendar (REQ-17)
+  // =================================================================
+
+  async obtenerConexionCalendario(): Promise<ConexionCalendario> {
+    const sesion = await this.obtenerSesion();
+    if (!sesion) return aConexionCalendario(null);
+
+    const { data, error } = await this.cliente
+      .from("calendar_connections")
+      .select("status, google_account_email, connected_at, revoked_at, last_error")
+      .eq("user_id", sesion.usuarioId)
+      .maybeSingle<FilaConexionCalendario>();
+
+    if (error) throw aAppError(error, "consultar tu conexión con Google Calendar");
+    return aConexionCalendario(data);
+  }
+
+  async iniciarConexionCalendario(rutaRetorno: string): Promise<string> {
+    await this.exigirSesion();
+
+    const respuesta = await invocarFuncion<{
+      ok: boolean;
+      authorizationUrl?: string;
+      mensaje?: string;
+    }>("google-oauth-start", { redirectPath: rutaRetorno });
+
+    if (!respuesta.ok || !respuesta.authorizationUrl) {
+      throw new AppError(
+        "integracion",
+        respuesta.mensaje ?? "No pudimos iniciar la conexión con Google Calendar.",
+      );
     }
 
-    const { data, error } = await this.client.from("facilities").insert(payload).select("id").single();
-    if (error) {
-      throw new Error(error.message);
-    }
+    return respuesta.authorizationUrl;
+  }
 
-    const adminId = await this.getCurrentUserId();
-    await this.client.from("facility_admin_assignments").upsert(
-      {
-        admin_id: adminId,
-        facility_id: data.id,
-      },
-      { onConflict: "admin_id,facility_id" },
+  async desconectarCalendario(): Promise<{ mensaje: string }> {
+    await this.exigirSesion();
+
+    const respuesta = await invocarFuncion<{ ok: boolean; mensaje?: string }>(
+      "google-calendar-disconnect",
     );
-  }
 
-  async saveBloque(bloque: Omit<Bloque, "id"> & { id?: string }): Promise<void> {
-    const payload = {
-      facility_id: bloque.recintoId,
-      starts_at: bloque.inicio,
-      ends_at: bloque.fin,
-      max_capacity: bloque.capacidadMaxima,
-      active: bloque.activo,
+    if (!respuesta.ok) {
+      throw new AppError(
+        "integracion",
+        respuesta.mensaje ?? "No pudimos desconectar tu cuenta de Google Calendar.",
+      );
+    }
+
+    return {
+      mensaje: respuesta.mensaje ??
+        "Desconectamos tu cuenta de Google Calendar. Tus reservas siguen vigentes.",
     };
+  }
 
-    if (bloque.id) {
-      const { error } = await this.client.from("time_blocks").update(payload).eq("id", bloque.id);
-      if (error) {
-        throw new Error(error.message);
-      }
-      return;
+  // =================================================================
+  // Administración (REQ-28 a REQ-33)
+  // =================================================================
+
+  /**
+   * Recintos asignados al administrador. La política RLS
+   * facilities_select_assigned_admin permite ver también los
+   * desactivados, de modo que pueda reactivarlos.
+   */
+  async listarRecintosAsignados(): Promise<Recinto[]> {
+    const sesion = await this.exigirSesion();
+
+    const { data: asignaciones, error: errorAsignaciones } = await this.cliente
+      .from("facility_admin_assignments")
+      .select("facility_id")
+      .eq("admin_id", sesion.usuarioId);
+
+    if (errorAsignaciones) {
+      throw aAppError(errorAsignaciones, "cargar tus recintos asignados");
     }
 
-    const { error } = await this.client.from("time_blocks").insert(payload);
-    if (error) {
-      throw new Error(error.message);
+    const ids = (asignaciones ?? []).map((a) => (a as { facility_id: string }).facility_id);
+    if (ids.length === 0) return [];
+
+    const { data, error } = await this.cliente
+      .from("facilities")
+      .select("id, name, facility_type, description, operation_hours, active")
+      .in("id", ids)
+      .order("name", { ascending: true });
+
+    if (error) throw aAppError(error, "cargar tus recintos asignados");
+    return (data as FilaRecinto[]).map(aRecinto);
+  }
+
+  /** Crea el recinto y lo autoasigna de forma atómica (REQ-28, REQ-29). */
+  async crearRecinto(datos: DatosRecinto): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("admin_create_facility", {
+      _name: datos.nombre.trim(),
+      _facility_type: datos.tipo.trim(),
+      _description: datos.descripcion.trim(),
+      _operation_hours: datos.horarioFuncionamiento.trim(),
+    });
+
+    if (error) throw aAppError(error, "crear el recinto");
+
+    const r = data as { ok: boolean; mensaje?: string };
+    return {
+      ok: r.ok,
+      mensaje: r.mensaje ?? (r.ok ? "Recinto creado." : "No pudimos crear el recinto."),
+    };
+  }
+
+  async actualizarRecinto(recintoId: string, datos: Partial<DatosRecinto>): Promise<void> {
+    await this.exigirSesion();
+
+    const payload: Record<string, unknown> = {};
+    if (datos.nombre !== undefined) payload.name = datos.nombre.trim();
+    if (datos.tipo !== undefined) payload.facility_type = datos.tipo.trim();
+    if (datos.descripcion !== undefined) payload.description = datos.descripcion.trim();
+    if (datos.horarioFuncionamiento !== undefined) {
+      payload.operation_hours = datos.horarioFuncionamiento.trim();
+    }
+    if (datos.activo !== undefined) payload.active = datos.activo;
+
+    if (Object.keys(payload).length === 0) return;
+
+    // RLS acota la actualización a los recintos asignados; si el
+    // administrador no lo tiene asignado, no se afecta ninguna fila.
+    const { data, error } = await this.cliente
+      .from("facilities")
+      .update(payload)
+      .eq("id", recintoId)
+      .select("id");
+
+    if (error) throw aAppError(error, "actualizar el recinto");
+    if (!data || data.length === 0) {
+      throw new AppError("permisos", "No administras ese recinto.");
     }
   }
+
+  async listarBloques(recintoId: string): Promise<Bloque[]> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente
+      .from("time_blocks")
+      .select("id, facility_id, starts_at, ends_at, max_capacity, active")
+      .eq("facility_id", recintoId)
+      .order("starts_at", { ascending: true })
+      .limit(500);
+
+    if (error) throw aAppError(error, "cargar los bloques horarios");
+    return (data as FilaBloque[]).map(aBloque);
+  }
+
+  async crearBloque(datos: DatosBloque): Promise<void> {
+    await this.exigirSesion();
+
+    const { error } = await this.cliente.from("time_blocks").insert({
+      facility_id: datos.recintoId,
+      starts_at: datos.inicio,
+      ends_at: datos.fin,
+      max_capacity: datos.capacidadMaxima,
+      active: datos.activo,
+    });
+
+    if (error) {
+      if (error.code === "23505") {
+        throw new AppError(
+          "conflicto",
+          "Ya existe un bloque activo que comienza a esa hora en este recinto.",
+        );
+      }
+      throw aAppError(error, "crear el bloque horario");
+    }
+  }
+
+  async actualizarBloque(bloqueId: string, datos: Partial<DatosBloque>): Promise<void> {
+    await this.exigirSesion();
+
+    const payload: Record<string, unknown> = {};
+    if (datos.inicio !== undefined) payload.starts_at = datos.inicio;
+    if (datos.fin !== undefined) payload.ends_at = datos.fin;
+    if (datos.capacidadMaxima !== undefined) payload.max_capacity = datos.capacidadMaxima;
+    if (datos.activo !== undefined) payload.active = datos.activo;
+
+    if (Object.keys(payload).length === 0) return;
+
+    const { data, error } = await this.cliente
+      .from("time_blocks")
+      .update(payload)
+      .eq("id", bloqueId)
+      .select("id");
+
+    if (error) throw aAppError(error, "actualizar el bloque horario");
+    if (!data || data.length === 0) {
+      throw new AppError("permisos", "No administras el recinto de ese bloque.");
+    }
+  }
+
+  /** REQ-31 · devuelve el nombre de quien reservó, nunca su correo ni teléfono. */
+  async listarReservasAdmin(
+    recintoId: string | null,
+    alcance: "vigentes" | "historial" | "todas",
+  ): Promise<ReservaAdmin[]> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("admin_list_reservations", {
+      _facility_id: recintoId,
+      _scope: alcance,
+      _limit: 300,
+    });
+
+    if (error) throw aAppError(error, "cargar las reservas del recinto");
+    return ((data ?? []) as FilaReservaAdmin[]).map(aReservaAdmin);
+  }
+
+  /** REQ-33 · estado de las integraciones por reserva. */
+  async listarIncidenciasIntegracion(): Promise<IncidenciaIntegracion[]> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("admin_integration_report", { _limit: 200 });
+    if (error) throw aAppError(error, "cargar el estado de las integraciones");
+    return ((data ?? []) as FilaIncidencia[]).map(aIncidencia);
+  }
+
+  async listarAuditoria(recintoId: string | null): Promise<EntradaAuditoria[]> {
+    await this.exigirSesion();
+
+    let consulta = this.cliente
+      .from("reservation_audit_log")
+      .select("id, reservation_id, facility_id, action, actor_role, details, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (recintoId) consulta = consulta.eq("facility_id", recintoId);
+
+    const { data, error } = await consulta;
+    if (error) throw aAppError(error, "cargar la auditoría");
+    return (data as FilaAuditoria[]).map(aAuditoria);
+  }
+
+  // =================================================================
+  // Auxiliares
+  // =================================================================
+
+  private async exigirSesion(): Promise<SesionActual> {
+    const sesion = await this.obtenerSesion();
+    if (!sesion) {
+      throw new AppError("sesion_expirada", "Necesitas iniciar sesión para continuar.");
+    }
+    return sesion;
+  }
+}
+
+/** Inicio del día local (yyyy-mm-dd) como instante ISO. */
+function inicioDelDia(fecha: string): string {
+  return new Date(`${fecha}T00:00:00`).toISOString();
+}
+
+/** Fin del día local (yyyy-mm-dd) como instante ISO. */
+function finDelDia(fecha: string): string {
+  return new Date(`${fecha}T23:59:59.999`).toISOString();
 }
