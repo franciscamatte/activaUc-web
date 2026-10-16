@@ -156,6 +156,39 @@ export function emailFromIdToken(idToken: string | null): string | null {
   }
 }
 
+/**
+ * Extrae el motivo que informa Google, para no quedarse sólo con el
+ * código HTTP.
+ *
+ * Sin esto, un 400 es indistinguible de cualquier otro: el operador ve
+ * «HTTP 400» y no tiene forma de saber si el problema es el formato de
+ * una fecha, un identificador de evento inválido o un campo mal armado.
+ * El mensaje se recorta y nunca incluye el token, que viaja en la
+ * cabecera y no en el cuerpo.
+ */
+async function motivoDeError(response: Response): Promise<string> {
+  let detalle: string;
+  try {
+    const texto = await response.text();
+    try {
+      const parsed = JSON.parse(texto) as {
+        error?: { message?: string; errors?: Array<{ reason?: string; message?: string }> };
+      };
+      const principal = parsed.error?.message ?? "";
+      const razon = parsed.error?.errors?.[0]?.reason ?? "";
+      detalle = [razon, principal].filter(Boolean).join(": ");
+    } catch {
+      detalle = texto.slice(0, 200);
+    }
+  } catch {
+    detalle = "";
+  }
+
+  return detalle
+    ? `HTTP ${response.status} · ${detalle.slice(0, 220)}`
+    : `HTTP ${response.status}`;
+}
+
 export interface CalendarEventInput {
   eventId: string;
   summary: string;
@@ -193,7 +226,8 @@ export async function createCalendarEvent(
       location: input.location,
       start: { dateTime: input.startsAt, timeZone: input.timeZone },
       end: { dateTime: input.endsAt, timeZone: input.timeZone },
-      source: { title: "ActivaUC" },
+      // No se envía `source`: la API exige que lleve `url` además de
+      // `title`, y sin ella responde 400. No aporta nada al usuario.
       reminders: { useDefault: true },
     }),
   });
@@ -206,7 +240,7 @@ export async function createCalendarEvent(
   if (!response.ok) {
     throw new GoogleApiError(
       response.status,
-      `Google Calendar rechazó la creación del evento (HTTP ${response.status}).`,
+      `Google Calendar rechazó la creación del evento: ${await motivoDeError(response)}`,
     );
   }
 
@@ -234,7 +268,7 @@ export async function deleteCalendarEvent(
 
   throw new GoogleApiError(
     response.status,
-    `Google Calendar rechazó la eliminación del evento (HTTP ${response.status}).`,
+    `Google Calendar rechazó la eliminación del evento: ${await motivoDeError(response)}`,
   );
 }
 
