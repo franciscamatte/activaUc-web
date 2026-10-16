@@ -303,14 +303,14 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  225 passed (225)
+     Tests  233 passed (233)
 ```
 
 | Archivo | Pruebas |
 |---|---|
-| `src/data/mockRepository.test.ts` | 58 |
+| `src/data/mockRepository.test.ts` | 61 |
 | `src/domain/reservationRules.test.ts` | 34 |
-| `src/test/twilioWhatsapp.test.ts` | 35 |
+| `src/test/twilioWhatsapp.test.ts` | 40 |
 | `src/test/oauthCrypto.test.ts` | 24 |
 | `src/test/googleCalendar.test.ts` | 23 |
 | `src/lib/errors.test.ts` | 21 |
@@ -323,8 +323,9 @@ Test Files  8 passed (8)
 ✔ 10_schema.sql        ✔ 30_cancellations.sql   ✔ 50_integrations.sql
 ✔ 20_reservations.sql  ✔ 40_rls.sql             ✔ 60_block_series.sql
                                                 ✔ 70_despacho_inmediato.sql
+                                                ✔ 80_canal_correo.sql
 
-✔ 7 archivos de prueba superados
+✔ 8 archivos de prueba superados
 ```
 
 Cada archivo corre en su propia transacción, que se revierte. El arranque

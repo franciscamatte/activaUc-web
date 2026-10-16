@@ -145,3 +145,63 @@ crea otro proyecto de Supabase desde cero hay que repetirlo. La
 alternativa sería la Management API de Supabase, que requiere un token
 de acceso personal y añade un secreto más que custodiar; para un paso
 que se hace una vez por entorno, no vale la pena.
+
+---
+
+## 6. Otra cosa: las notificaciones de reserva por correo
+
+Lo de arriba es el correo de **autenticación**, que manda Supabase. Aparte
+existe el correo de **notificaciones** —confirmación y recordatorio de
+reserva—, que manda Twilio y que cada persona activa o no en «Datos
+personales».
+
+Son canales independientes del de WhatsApp: se puede tener uno, el otro,
+los dos o ninguno. Lo decide `profiles.email_consent`, y sin
+consentimiento no sale nada.
+
+### 6.1 Lo que el plan de prueba de Twilio permite
+
+Lo mismo que con WhatsApp: **el contenido no es libre**. Comprobado el
+16/10/2026 contra la cuenta real:
+
+```
+POST comms.twilio.com/v1/Emails   (asunto y HTML de ActivaUC)
+→ HTTP 400 · Invalid template: email content does not match any approved template
+```
+
+Y el remitente también es fijo, `<AccountSid>@twilio.email`.
+
+Para ejercer la cadena completa sin pagar se fija el contenido con el de
+una plantilla de muestra, copiado **tal cual** de la consola (Messaging →
+Try it out → Send an email):
+
+```bash
+TWILIO_EMAIL_ASUNTO_FIJO='Reminder: Your Upcoming Appointment'
+TWILIO_EMAIL_HTML_FIJO='<p><b>This is a test email from Twilio.</b></p>…'
+```
+
+> Las comillas simples no son opcionales: `.env.secrets` lo interpreta el
+> shell, y un valor con espacios sin comillas rompe la carga.
+
+Con eso verificado el 16/10/2026: reserva → cola → despacho inmediato →
+worker → Twilio, correo aceptado en **3 s** con su `operationId`, y
+WhatsApp en paralelo en 2 s.
+
+### 6.2 Lo que requiere salir de Trial
+
+Vaciar las dos variables y ya: entonces se envían el asunto y el cuerpo
+propios de ActivaUC, con los datos de la reserva
+(`buildSubject` / `buildEmailHtml`). Conviene además verificar un dominio
+propio en Twilio y ponerlo en `TWILIO_EMAIL_FROM`, porque un correo desde
+`@twilio.email` hacia `@uc.cl` se va a filtrar igual que los de
+autenticación.
+
+### 6.3 Lo que no hay
+
+La API de correo de Twilio es **asíncrona y sin webhook de estados**: no
+devuelve el identificador de un mensaje, sino un `operationId` de la
+operación encolada. Eso significa que del correo se sabe que Twilio lo
+aceptó, no que se entregó, y que `whatsapp_messages.status` se queda en
+`enviado` sin pasar a `entregado` como sí ocurre en WhatsApp. Para
+seguirle la pista hay que ir a la consola de Twilio con ese
+`operationId`.

@@ -21,7 +21,7 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**225 pruebas en 8 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**233 pruebas en 8 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
@@ -92,7 +92,7 @@ fallar con un error de conexión en bruto.
    Supabase: esquema `auth`, `auth.uid()`, y los roles `anon`,
    `authenticated` y `service_role` (este último con `BYPASSRLS`, igual que en
    Supabase).
-3. Aplica las seis migraciones **en el mismo orden que la CLI**.
+3. Aplica las ocho migraciones **en el mismo orden que la CLI**.
 4. Ejecuta cada archivo de prueba en su propia transacción, que **revierte** al
    terminar: las pruebas no se contaminan entre sí.
 5. Elimina la base.
@@ -111,6 +111,7 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 | `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad de WhatsApp; **idempotencia del webhook y no retroceso de «entregado»**; reintentos y fallos definitivos; revocación de consentimiento; recuperación de trabajos interrumpidos; informe de integraciones |
 | `60_block_series.sql` | Creación de series (REQ-30): autorización sólo al administrador asignado; validaciones que rechazan antes de escribir; vista previa que cuenta sin escribir; serie diaria y por días de la semana **en hora local de Santiago**; repetir la serie no duplica; extender respeta lo publicado; bloques en el pasado omitidos sin fallar; desactivación en serie que conserva las reservas confirmadas |
 | `70_despacho_inmediato.sql` | Los cuatro disparadores de despacho existen y son **por sentencia**; reservar y cancelar siguen funcionando con ellos puestos; y, lo que importa, **un fallo del despacho no impide reservar**: el trabajo queda encolado para que lo recoja el cron |
+| `80_canal_correo.sql` | El canal de correo no se cruza con WhatsApp: consentimientos independientes (el correo no exige teléfono); con un solo canal consentido no se encola el otro; con ambos, **dos trabajos por aviso** con claves de idempotencia distintas y la de WhatsApp conservando su prefijo histórico; revocar un canal descarta lo suyo y **no toca** lo del otro; el reclamo resuelve el destino de cada canal y la bitácora guarda sólo el dominio del correo; canal y destino restringidos por `check` |
 
 Las aserciones usan el `ASSERT` de PL/pgSQL: si una condición falla, la
 sentencia lanza y el script reporta el archivo y el mensaje exactos.
@@ -133,8 +134,9 @@ sentencia lanza y el script reporta el archivo y el mensaje exactos.
 ✔ 50_integrations.sql
 ✔ 60_block_series.sql
 ✔ 70_despacho_inmediato.sql
+✔ 80_canal_correo.sql
 
-✔ 7 archivos de prueba superados
+✔ 8 archivos de prueba superados
 ```
 
 ---

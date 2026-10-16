@@ -40,6 +40,9 @@ export interface Perfil {
   telefono: string | null;
   whatsappConsentido: boolean;
   whatsappConsentidoEn: string | null;
+  /** REQ-22/REQ-23 aplicados al correo: avisos de reserva por correo. */
+  correoConsentido: boolean;
+  correoConsentidoEn: string | null;
   rol: Rol;
 }
 

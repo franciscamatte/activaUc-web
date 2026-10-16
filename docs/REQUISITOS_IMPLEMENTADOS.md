@@ -90,9 +90,9 @@ solicitud (igual que PostgREST en Supabase):
 
 | Req | Descripción | Estado | Dónde está | Verificación |
 |---|---|---|---|---|
-| REQ-22 | Registrar teléfono con consentimiento explícito | Implementado | `set_whatsapp_consent()`. Restricciones en la tabla: formato E.164 y `whatsapp_consent = false OR phone IS NOT NULL` | `10_schema.sql` › «restricciones de datos personales»; `phone.test.ts` (20 casos) |
+| REQ-22 | Registrar teléfono con consentimiento explícito | Implementado | `set_whatsapp_consent()`. Restricciones en la tabla: formato E.164 y `whatsapp_consent = false OR phone IS NOT NULL`. Desde la migración 08 hay un segundo canal, el correo, con `set_email_consent()` y su propio consentimiento: la persona elige WhatsApp, correo, ambos o ninguno. La dirección no se duplica en `profiles`, se lee de `auth.users` | `10_schema.sql` › «restricciones de datos personales»; `80_canal_correo.sql` (6 escenarios); `phone.test.ts` (20 casos) |
 | REQ-23 | Revocar el consentimiento o eliminar el teléfono, deteniendo los envíos | Implementado | La misma función borra el teléfono, apaga el consentimiento y **cancela los trabajos pendientes**. El worker tampoco reclama trabajos de usuarios sin consentimiento vigente | `50_integrations.sql` › «revocación de consentimiento y validación E.164» |
-| REQ-24 | Confirmación por WhatsApp al crear la reserva | Implementado | Trabajo `confirmacion` encolado para ejecución inmediata; `process-notification-jobs` lo envía por Twilio | `50_integrations.sql` › «cola de WhatsApp, trazabilidad e idempotencia» |
+| REQ-24 | Confirmación al crear la reserva | Implementado | Trabajo `confirmacion` encolado para ejecución inmediata, uno por cada canal consentido (`private.encolar_notificacion`); `process-notification-jobs` lo envía por la API de Mensajes o la de Correo de Twilio según el canal. Ejercido contra la cuenta real el 16/10/2026: WhatsApp en 2 s, correo en 3 s | `50_integrations.sql` › «cola de WhatsApp, trazabilidad e idempotencia»; `80_canal_correo.sql` |
 | REQ-25 | Recordatorio 2 h antes; si la reserva se crea con menos de 2 h, sólo confirmación | Implementado | `scheduled_for = starts_at - 2 horas`; si ese instante ya pasó, **no se encola nada** | `20_reservations.sql` › «regla exacta del recordatorio de 2 horas» (ambos lados del límite); `reservationRules.test.ts` › `tendraRecordatorio` |
 | REQ-26 | Notificar al usuario cuando el administrador cancela | Implementado | `cancel_reservation` encola `cancelacion_admin` con el motivo, sólo si hay consentimiento vigente | `30_cancellations.sql` › «cancelación administrativa y aviso por WhatsApp» |
 | REQ-27 | Registrar el estado de cada mensaje para trazabilidad | Implementado | Tabla `whatsapp_messages` (`pendiente`, `enviado`, `entregado`, `fallido`, `omitido`) + webhook `twilio-status-webhook` con validación de firma, idempotencia por `(provider, external_id, event_type)` y sin retroceso de «entregado» | `50_integrations.sql`; `twilioWhatsapp.test.ts` › «autenticación del webhook» (8 casos, incluye manipulación y reenvío cruzado) |
@@ -151,7 +151,7 @@ solicitud (igual que PostgREST en Supabase):
 | Guía de uso para usuarios y administradores | `docs/GUIA_USUARIO.md`, `docs/GUIA_ADMINISTRADOR.md` |
 | Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) y por una prueba equivalente sobre las plantillas de WhatsApp |
 | Linter configurado en el repositorio | ESLint con configuración plana sobre `src/`, `supabase/functions/` y `scripts/`. **La configuración anterior sólo declaraba `files: ["**/*.js"]`, por lo que no revisaba ningún archivo del proyecto**; se corrigió |
-| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 225 pruebas con Vitest + 7 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
+| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 233 pruebas con Vitest + 8 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
 
 ---
 

@@ -17,7 +17,8 @@ set -euo pipefail
 AQUI_DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/node-env.sh
 source "$AQUI_DEPLOY/lib/node-env.sh"
-cd "$(dirname "$AQUI_DEPLOY")"
+PROYECTO="$(dirname "$AQUI_DEPLOY")"
+cd "$PROYECTO"
 
 PROYECTO=""
 SOLO=""
@@ -72,7 +73,11 @@ desplegar() {
 
   echo ""
   echo "── Desplegando $nombre (verify_jwt=$verifica)"
-  npx supabase functions deploy "$nombre" "${ARGS[@]}" "${extra[@]}"
+  # En un subshell y volviendo a entrar al proyecto por ruta absoluta:
+  # la CLI de Supabase deja el proceso parado en un directorio temporal
+  # que después borra, y el `npx` siguiente moría con
+  # «ENOENT: uv_cwd» al no tener directorio de trabajo.
+  ( cd "$PROYECTO" && npx supabase functions deploy "$nombre" "${ARGS[@]}" "${extra[@]}" )
 }
 
 if [[ -n "$SOLO" ]]; then

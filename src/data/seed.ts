@@ -33,6 +33,8 @@ export interface EstadoDemo {
     telefono: string | null;
     whatsappConsentido: boolean;
     whatsappConsentidoEn: string | null;
+    correoConsentido: boolean;
+    correoConsentidoEn: string | null;
   }>;
   recintos: Recinto[];
   bloques: Bloque[];
@@ -195,6 +197,8 @@ export function crearDatosDemo(): EstadoDemo {
         telefono: null,
         whatsappConsentido: false,
         whatsappConsentidoEn: null,
+        correoConsentido: false,
+        correoConsentidoEn: null,
       },
       {
         id: adminId,
@@ -206,6 +210,8 @@ export function crearDatosDemo(): EstadoDemo {
         telefono: null,
         whatsappConsentido: false,
         whatsappConsentidoEn: null,
+        correoConsentido: false,
+        correoConsentidoEn: null,
       },
     ],
     recintos,

@@ -49,6 +49,9 @@ export interface EstadoAuth {
     telefono: string | null,
     consentido: boolean,
   ) => Promise<{ ok: boolean; mensaje: string }>;
+  definirConsentimientoCorreo: (
+    consentido: boolean,
+  ) => Promise<{ ok: boolean; mensaje: string }>;
   descartarAvisoExpiracion: () => void;
 }
 

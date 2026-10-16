@@ -15,19 +15,22 @@
  */
 
 import { sendWhatsApp, TwilioApiError } from "../_shared/twilio.ts";
+import { sendEmail, TwilioEmailError } from "../_shared/twilioEmail.ts";
 import { isE164, normalizePhone } from "../_shared/phone.ts";
 import {
   buildBody,
   buildContentVariables,
   contentSidEnvVar,
   contentVarsEnvVar,
+  buildSubject,
+  buildEmailHtml,
   formatSpanishDateTime,
   type NotificationKind,
 } from "../_shared/messages.ts";
 import { missingEnv, optionalEnv, requireEnv } from "../_shared/env.ts";
 import { fail, json, preflight } from "../_shared/http.ts";
 import { adminClient } from "../_shared/supabase.ts";
-import { createLogger, maskPhone, safeErrorMessage } from "../_shared/log.ts";
+import { createLogger, maskEmail, maskPhone, safeErrorMessage } from "../_shared/log.ts";
 import { assertWorkerAuthorized } from "../_shared/worker_auth.ts";
 
 const log = createLogger("process-notification-jobs");
@@ -38,10 +41,12 @@ interface ClaimedJob {
   reservation_id: string | null;
   user_id: string;
   kind: NotificationKind;
+  channel: "whatsapp" | "email";
   attempts: number;
   max_attempts: number;
   payload: Record<string, unknown> | null;
   to_phone: string | null;
+  to_email: string | null;
   full_name: string | null;
   facility_name: string | null;
   starts_at: string | null;
@@ -96,17 +101,29 @@ Deno.serve(async (request) => {
   const resumen = { reclamados: claimed.length, enviados: 0, fallidos: 0, omitidos: 0 };
 
   for (const job of claimed) {
+    const esCorreo = job.channel === "email";
     const phone = normalizePhone(job.to_phone ?? "");
+    const correo = (job.to_email ?? "").trim();
 
-    // Doble verificación del número: la BD ya lo restringe, pero el
+    // Doble verificación del destino: la BD ya lo restringe, pero el
     // worker no confía en un único control (REQ: no enviar a inválidos).
-    if (!isE164(phone)) {
+    if (!esCorreo && !isE164(phone)) {
       await admin.rpc("skip_notification_job", {
         _job_id: job.job_id,
         _reason: "Número de teléfono no válido en formato E.164.",
       });
       resumen.omitidos += 1;
       log.warn("Notificación omitida por teléfono inválido", { job_id: job.job_id });
+      continue;
+    }
+
+    if (esCorreo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      await admin.rpc("skip_notification_job", {
+        _job_id: job.job_id,
+        _reason: "La cuenta no tiene una dirección de correo utilizable.",
+      });
+      resumen.omitidos += 1;
+      log.warn("Notificación omitida por correo inválido", { job_id: job.job_id });
       continue;
     }
 
@@ -135,35 +152,73 @@ Deno.serve(async (request) => {
       : null;
 
     try {
-      const result = await sendWhatsApp({
-        accountSid,
-        authToken,
-        from,
-        to: phone,
-        body: buildBody(job.kind, ctx),
-        contentSid,
-        contentVariables,
-        statusCallbackUrl,
-      });
+      // El identificador del proveedor y el destino cambian con el
+      // canal; lo demás del registro es idéntico.
+      let providerSid: string;
+      let destino: string;
+      let estadoProveedor: string;
+
+      if (esCorreo) {
+        const result = await sendEmail({
+          accountSid,
+          authToken,
+          from: optionalEnv("TWILIO_EMAIL_FROM") || null,
+          fromName: optionalEnv("TWILIO_EMAIL_FROM_NAME") || null,
+          to: correo,
+          // En cuenta Trial, Twilio exige que el contenido coincida
+          // exactamente con una de sus plantillas de muestra
+          // («Invalid template: email content does not match any
+          // approved template»). Estas dos variables permiten fijar ese
+          // contenido para ejercer la cadena completa sin pagar; vacías,
+          // se envían el asunto y el cuerpo propios de ActivaUC.
+          subject: optionalEnv("TWILIO_EMAIL_ASUNTO_FIJO") ||
+            buildSubject(job.kind, ctx),
+          html: optionalEnv("TWILIO_EMAIL_HTML_FIJO") ||
+            buildEmailHtml(job.kind, ctx, optionalEnv("APP_URL") || null),
+        });
+        providerSid = result.operationId;
+        destino = correo;
+        // La API de correo es asíncrona: Twilio acepta la operación y
+        // la envía después, y no hay webhook de estados. «aceptado» es
+        // todo lo que se puede afirmar.
+        estadoProveedor = "aceptado";
+      } else {
+        const result = await sendWhatsApp({
+          accountSid,
+          authToken,
+          from,
+          to: phone,
+          body: buildBody(job.kind, ctx),
+          contentSid,
+          contentVariables,
+          statusCallbackUrl,
+        });
+        providerSid = result.sid;
+        destino = phone;
+        estadoProveedor = result.status;
+      }
 
       await admin.rpc("complete_notification_job", {
         _job_id: job.job_id,
-        _provider_sid: result.sid,
-        _to_phone: phone,
+        _provider_sid: providerSid,
+        _to_phone: destino,
       });
 
       resumen.enviados += 1;
       log.info("Mensaje enviado", {
         job_id: job.job_id,
         tipo: job.kind,
-        destino: maskPhone(phone),
-        plantilla: contentSid ? "aprobada" : "texto_libre",
+        destino: esCorreo ? maskEmail(correo) : maskPhone(phone),
+        plantilla: esCorreo ? "correo" : contentSid ? "aprobada" : "texto_libre",
         variables: contentVariables ? Object.keys(contentVariables).length : 0,
-        estado_twilio: result.status,
+        canal: job.channel,
+        estado_twilio: estadoProveedor,
       });
     } catch (cause) {
-      const retryable = cause instanceof TwilioApiError ? cause.retryable : true;
-      const errorCode = cause instanceof TwilioApiError ? cause.code : null;
+      const esErrorDeTwilio =
+        cause instanceof TwilioApiError || cause instanceof TwilioEmailError;
+      const retryable = esErrorDeTwilio ? cause.retryable : true;
+      const errorCode = esErrorDeTwilio ? cause.code : null;
 
       await admin.rpc("fail_notification_job", {
         _job_id: job.job_id,
@@ -176,7 +231,8 @@ Deno.serve(async (request) => {
       log.warn("Envío fallido", {
         job_id: job.job_id,
         tipo: job.kind,
-        destino: maskPhone(phone),
+        canal: job.channel,
+        destino: esCorreo ? maskEmail(correo) : maskPhone(phone),
         codigo: errorCode,
         reintentable: retryable,
         intentos: job.attempts,

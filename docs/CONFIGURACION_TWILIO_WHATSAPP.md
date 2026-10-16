@@ -513,3 +513,61 @@ where status = 'error'
 
 No reintentes los fallos definitivos (número inválido, destinatario dado de
 baja): sólo consumen cuota y vuelven a fallar.
+
+---
+
+## 10. Cambiar de cuenta de Twilio
+
+Nada en la base de datos depende de la cuenta, así que cambiarla es sólo
+mover secretos. Lo que engaña es que hay tres valores que parecen
+universales y son **por cuenta**.
+
+> Twilio prohíbe en su política de uso abrir cuentas de prueba nuevas
+> para seguir sin pagar, y puede suspenderlas. Esta sección vale igual
+> para los casos legítimos: pasar a una cuenta de pago, a una del
+> equipo, o a una de otro proyecto.
+
+### 10.1 Qué cambia
+
+| Variable | ¿Cambia? | Por qué |
+|---|---|---|
+| `TWILIO_ACCOUNT_SID` | **Sí** | Identifica la cuenta |
+| `TWILIO_AUTH_TOKEN` | **Sí** | Es de la cuenta, y se invalida al rotarlo |
+| `TWILIO_WHATSAPP_FROM` | **Sí** | El número del Sandbox depende de la cuenta (§ 2) |
+| `TWILIO_CONTENT_SID_*` | **Sí** | Los `HX` de muestra son de cada cuenta |
+| `TWILIO_EMAIL_FROM` | No, si está vacío | Se deriva del Account SID nuevo solo |
+| `TWILIO_EMAIL_*_FIJO` | Comprobar | El texto de muestra suele ser el mismo, pero hay que verificarlo |
+| `TWILIO_STATUS_CALLBACK_URL` | No | Es una URL nuestra, no de Twilio |
+| `ENCRYPTION_KEY`, `CRON_SECRET`, Google, `APP_*` | No | No tienen relación con Twilio |
+
+### 10.2 Los pasos
+
+```bash
+# 1. Editar .env.secrets con el SID y el token nuevos.
+#    El número y los ContentSid se dejan como estén por ahora.
+
+# 2. Ver qué falta. El diagnóstico dice el número del Sandbox de la
+#    cuenta nueva y avisa si el configurado no es el suyo.
+bash scripts/diagnose-twilio.sh
+
+# 3. Desde tu WhatsApp, enviar el «join <dos-palabras>» de la consola
+#    de la cuenta nueva. Es un Sandbox distinto: el join anterior no
+#    sirve.
+
+# 4. Copiar de la consola los ContentSid de muestra y el número, y
+#    volver a ejecutar el diagnóstico hasta que no marque nada.
+
+# 5. Cargar y desplegar.
+bash scripts/set-secrets.sh
+bash scripts/deploy-functions.sh
+```
+
+### 10.3 Lo que queda del pasado
+
+Los `provider_message_sid` ya guardados en `whatsapp_messages` pertenecen
+a la cuenta anterior, así que dejan de poderse consultar en la consola de
+Twilio. No rompe nada —la trazabilidad interna sigue completa— pero
+conviene saberlo si algún día hay que auditar un envío viejo.
+
+Y si quedaran trabajos a medio reintentar de antes del cambio, saldrán
+con las credenciales nuevas, que es lo correcto.

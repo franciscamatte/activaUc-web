@@ -29,6 +29,8 @@ export interface FilaPerfil {
   phone: string | null;
   whatsapp_consent: boolean;
   whatsapp_consent_at: string | null;
+  email_consent: boolean;
+  email_consent_at: string | null;
   role: Rol;
 }
 
@@ -147,6 +149,8 @@ export function aPerfil(fila: FilaPerfil, correo: string): Perfil {
     telefono: fila.phone,
     whatsappConsentido: fila.whatsapp_consent,
     whatsappConsentidoEn: fila.whatsapp_consent_at,
+    correoConsentido: fila.email_consent,
+    correoConsentidoEn: fila.email_consent_at,
     rol: fila.role,
   };
 }

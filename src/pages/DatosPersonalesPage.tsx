@@ -41,6 +41,7 @@ export default function DatosPersonalesPage() {
     repositorio,
     actualizarNombre,
     definirConsentimientoWhatsapp,
+    definirConsentimientoCorreo,
     recargarCalendario,
   } = useAuth();
 
@@ -59,6 +60,11 @@ export default function DatosPersonalesPage() {
   const [guardandoWhatsapp, setGuardandoWhatsapp] = useState(false);
   const [avisoWhatsapp, setAvisoWhatsapp] = useState<string | null>(null);
   const [confirmarRevocacion, setConfirmarRevocacion] = useState(false);
+
+  // --- Correo (REQ-22, REQ-23 aplicados al otro canal) ------------
+  const [guardandoCorreo, setGuardandoCorreo] = useState(false);
+  const [avisoCorreo, setAvisoCorreo] = useState<string | null>(null);
+  const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
 
   // --- Google Calendar ----------------------------------------------
   const [procesandoCalendario, setProcesandoCalendario] = useState(false);
@@ -135,6 +141,21 @@ export default function DatosPersonalesPage() {
       setErrorNombre(aAppError(e, "guardar tu nombre").message);
     } finally {
       setGuardandoNombre(false);
+    }
+  }
+
+  async function alternarCorreo(consentido: boolean) {
+    setAvisoCorreo(null);
+    setErrorCorreo(null);
+    setGuardandoCorreo(true);
+    try {
+      const r = await definirConsentimientoCorreo(consentido);
+      if (r.ok) setAvisoCorreo(r.mensaje);
+      else setErrorCorreo(r.mensaje);
+    } catch (e) {
+      setErrorCorreo(aAppError(e, "guardar tu preferencia de correo").message);
+    } finally {
+      setGuardandoCorreo(false);
     }
   }
 
@@ -366,6 +387,55 @@ export default function DatosPersonalesPage() {
           ) : null}
         </div>
       </form>
+
+      {/* --- Correo (REQ-22, REQ-23) --------------------------------- */}
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">
+            Notificaciones por correo
+          </h2>
+          {perfil.correoConsentido ? (
+            <Insignia tono="exito">Activadas</Insignia>
+          ) : (
+            <Insignia tono="neutro">Desactivadas</Insignia>
+          )}
+        </div>
+
+        <p className="text-sm text-slate-600">
+          La misma confirmación y el mismo recordatorio, a{" "}
+          <strong className="font-medium text-slate-800">{perfil.correo}</strong>, el
+          correo con que entras. Puedes tener las dos vías a la vez, una sola, o
+          ninguna: son independientes.
+        </p>
+
+        {errorCorreo ? (
+          <Alerta tono="error" titulo="No pudimos guardar tu preferencia">
+            {errorCorreo}
+          </Alerta>
+        ) : null}
+
+        {avisoCorreo ? (
+          <Alerta tono="exito" onCerrar={() => setAvisoCorreo(null)}>
+            {avisoCorreo}
+          </Alerta>
+        ) : null}
+
+        <div>
+          {perfil.correoConsentido ? (
+            <Boton
+              variante="secundario"
+              onClick={() => alternarCorreo(false)}
+              cargando={guardandoCorreo}
+            >
+              Desactivar los correos
+            </Boton>
+          ) : (
+            <Boton onClick={() => alternarCorreo(true)} cargando={guardandoCorreo}>
+              Avisarme por correo
+            </Boton>
+          )}
+        </div>
+      </div>
 
       {/* --- Google Calendar (REQ-17) -------------------------------- */}
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">

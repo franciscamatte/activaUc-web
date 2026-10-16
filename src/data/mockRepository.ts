@@ -62,6 +62,8 @@ interface CuentaDemo {
   telefono: string | null;
   whatsappConsentido: boolean;
   whatsappConsentidoEn: string | null;
+  correoConsentido: boolean;
+  correoConsentidoEn: string | null;
 }
 
 export class MockRepository implements ActivaRepository {
@@ -183,6 +185,8 @@ export class MockRepository implements ActivaRepository {
       telefono: null,
       whatsappConsentido: false,
       whatsappConsentidoEn: null,
+      correoConsentido: false,
+      correoConsentidoEn: null,
     });
     this.guardar();
 
@@ -235,6 +239,21 @@ export class MockRepository implements ActivaRepository {
     void correo;
   }
 
+  async definirConsentimientoCorreo(
+    consentido: boolean,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    const cuenta = this.cuentaActual();
+    cuenta.correoConsentido = consentido;
+    cuenta.correoConsentidoEn = consentido ? new Date().toISOString() : null;
+    this.guardar();
+    return {
+      ok: true,
+      mensaje: consentido
+        ? "Listo: te avisaremos por correo."
+        : "Dejamos de enviarte correos de tus reservas.",
+    };
+  }
+
   /**
    * En modo simulado el código es siempre 000000: no hay correo que
    * leer, y pedir uno real impediría probar el flujo sin backend.
@@ -281,6 +300,8 @@ export class MockRepository implements ActivaRepository {
       telefono: cuenta.telefono,
       whatsappConsentido: cuenta.whatsappConsentido,
       whatsappConsentidoEn: cuenta.whatsappConsentidoEn,
+      correoConsentido: cuenta.correoConsentido,
+      correoConsentidoEn: cuenta.correoConsentidoEn,
       rol: cuenta.rol,
     };
   }

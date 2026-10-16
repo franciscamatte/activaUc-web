@@ -284,7 +284,10 @@ export class SupabaseRepository implements ActivaRepository {
     return await conReintentos(async () => {
       const { data, error } = await this.cliente
         .from("profiles")
-        .select("id, full_name, phone, whatsapp_consent, whatsapp_consent_at, role")
+        .select(
+          "id, full_name, phone, whatsapp_consent, whatsapp_consent_at, " +
+            "email_consent, email_consent_at, role",
+        )
         .eq("id", sesion.usuarioId)
         .maybeSingle<FilaPerfil>();
 
@@ -315,6 +318,24 @@ export class SupabaseRepository implements ActivaRepository {
       .eq("id", sesion.usuarioId);
 
     if (error) throw aAppError(error, "guardar tu nombre");
+  }
+
+  async definirConsentimientoCorreo(
+    consentido: boolean,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("set_email_consent", {
+      _consent: consentido,
+    });
+
+    if (error) throw aAppError(error, "guardar tus preferencias de correo");
+
+    const respuesta = data as { ok: boolean; mensaje?: string };
+    return {
+      ok: respuesta.ok,
+      mensaje: respuesta.mensaje ?? "No pudimos guardar tu preferencia.",
+    };
   }
 
   async definirConsentimientoWhatsapp(

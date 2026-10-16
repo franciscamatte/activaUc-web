@@ -136,6 +136,16 @@ export interface ActivaRepository {
     telefono: string | null,
     consentido: boolean,
   ): Promise<{ ok: boolean; mensaje: string }>;
+  /**
+   * REQ-22 / REQ-23 para el canal de correo.
+   *
+   * No recibe la direccion: es la del correo con que la persona entro,
+   * ya verificado. Aceptar una cualquiera convertiria esto en un medio
+   * para enviar correo a terceros.
+   */
+  definirConsentimientoCorreo(
+    consentido: boolean,
+  ): Promise<{ ok: boolean; mensaje: string }>;
 
   // --- Catálogo y disponibilidad ------------------------------------
   listarRecintos(): Promise<Recinto[]>;

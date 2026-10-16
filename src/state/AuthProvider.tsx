@@ -216,6 +216,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       return resultado;
     },
 
+    definirConsentimientoCorreo: async (consentido) => {
+      if (!repositorio) throw aAppError(new Error("Repositorio no disponible."));
+      const resultado = await repositorio.definirConsentimientoCorreo(consentido);
+      if (resultado.ok) await cargarPerfil(repositorio);
+      return resultado;
+    },
+
     descartarAvisoExpiracion: () => setSesionExpirada(false),
   };
 
