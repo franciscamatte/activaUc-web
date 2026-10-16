@@ -10,6 +10,33 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  # package.json exige >=20.19. Se fija en lugar de confiar en el valor
+  # por omisión de Netlify, que cambia con el tiempo y podría quedar por
+  # debajo sin avisar.
+  NODE_VERSION = "22"
+
+# ---------------------------------------------------------------------
+# LO QUE NO VA AQUÍ, y hay que poner a mano en Netlify
+# ---------------------------------------------------------------------
+# .env está en .gitignore, así que una compilación desde el repositorio
+# no tiene las variables del frontend. Hay que definirlas en
+# Site configuration → Environment variables:
+#
+#   VITE_SUPABASE_URL        https://<ref>.supabase.co
+#   VITE_SUPABASE_ANON_KEY   la clave anon (pública) del proyecto
+#   VITE_DATA_MODE           supabase
+#
+# VITE_APP_URL se deja SIN DEFINIR a propósito: así la aplicación usa el
+# origen desde el que se la sirve, y el mismo build vale para el dominio
+# de producción y para las vistas previas de cada rama.
+#
+# Sin esas variables la compilación no falla, pero el sitio publicado
+# muestra un aviso de configuración en lugar de funcionar. No muestra
+# datos de ejemplo: src/lib/env.ts rechaza el modo mock en producción a
+# propósito, para que una demo no pueda pasar por un sistema real.
+# ---------------------------------------------------------------------
+
 # Misma regla que public/_redirects, para el despliegue desde el
 # repositorio. Ver allí el porqué del 200.
 [[redirects]]

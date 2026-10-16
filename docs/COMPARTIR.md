@@ -83,6 +83,53 @@ Alternativas equivalentes: **Vercel** (`npx vercel --prod`),
 **Cloudflare Pages**, **GitHub Pages**. Cualquiera sirve: son archivos
 estáticos.
 
+### 2.2.1 Mejor: conectar el repositorio
+
+Arrastrar `dist/` obliga a recompilar y volver a arrastrar con cada
+cambio. Conectando el repositorio, cada `git push` a la rama elegida
+redespliega solo, y `netlify.toml` ya trae el comando, la carpeta
+publicada, la versión de Node y las cabeceras.
+
+En Netlify: **Add new site → Import an existing project → GitHub**, y
+elegir el repositorio. Tres cosas que hay que mirar:
+
+**a) La rama.** Por omisión Netlify despliega la rama principal. El
+trabajo vive en **`Avance`**, así que hay que cambiarla en
+*Branch to deploy*, o no se publicará nada de esto.
+
+**b) Las variables de entorno. Esto es lo que más se olvida.** `.env`
+está en `.gitignore`, de modo que la compilación en Netlify no tiene la
+URL ni la clave. En **Site configuration → Environment variables**:
+
+```
+VITE_SUPABASE_URL        https://<ref>.supabase.co
+VITE_SUPABASE_ANON_KEY   la clave anon (pública)
+VITE_DATA_MODE           supabase
+```
+
+`VITE_APP_URL` se deja **sin definir**, para que la aplicación use el
+origen desde el que se la sirve. Así el mismo build sirve para el
+dominio de producción y para las vistas previas de cada rama.
+
+Sin esas variables la compilación **no falla**, pero el sitio muestra un
+aviso de configuración. No muestra datos de ejemplo: `src/lib/env.ts`
+rechaza el modo mock en una compilación de producción a propósito, para
+que una demostración no pueda pasar por un sistema real.
+
+**c) Los permisos del repositorio.** `activaUc-web` está bajo la cuenta
+de `franciscamatte`, no bajo la tuya. Netlify necesita instalar su
+aplicación de GitHub en ese repositorio, y eso suele requerir permisos
+de administración sobre él. Si no los tienes, hay tres salidas: que la
+dueña lo autorice, hacer un *fork* y conectar el tuyo —entonces los
+despliegues salen de tu copia, no del repositorio común—, o quedarse con
+el arrastre de `dist/`, que no depende de nadie.
+
+> Las vistas previas por rama son útiles, pero cada una tiene su propia
+> URL, y esas URLs **no** están en las *Redirect URLs* de Supabase ni en
+> los orígenes de Google. En una vista previa funcionará el catálogo
+> público y fallará el inicio de sesión. Es esperable; lo definitivo es
+> el dominio de producción.
+
 ### 2.3 Los cuatro ajustes que hay que hacer (importante)
 
 Sin esto la página carga pero el inicio de sesión y Google Calendar
