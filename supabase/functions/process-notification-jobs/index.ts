@@ -20,6 +20,7 @@ import {
   buildBody,
   buildContentVariables,
   contentSidEnvVar,
+  contentVarsEnvVar,
   formatSpanishDateTime,
   type NotificationKind,
 } from "../_shared/messages.ts";
@@ -126,6 +127,12 @@ Deno.serve(async (request) => {
     };
 
     const contentSid = optionalEnv(contentSidEnvVar(job.kind)) || null;
+    // Un orden de variables mal escrito es un error de configuración: se
+    // deja escapar para que el trabajo falle con el mensaje de la
+    // excepción, en lugar de enviar los datos en el lugar equivocado.
+    const contentVariables = contentSid
+      ? buildContentVariables(job.kind, ctx, optionalEnv(contentVarsEnvVar(job.kind)) || null)
+      : null;
 
     try {
       const result = await sendWhatsApp({
@@ -135,7 +142,7 @@ Deno.serve(async (request) => {
         to: phone,
         body: buildBody(job.kind, ctx),
         contentSid,
-        contentVariables: contentSid ? buildContentVariables(job.kind, ctx) : null,
+        contentVariables,
         statusCallbackUrl,
       });
 
@@ -151,6 +158,7 @@ Deno.serve(async (request) => {
         tipo: job.kind,
         destino: maskPhone(phone),
         plantilla: contentSid ? "aprobada" : "texto_libre",
+        variables: contentVariables ? Object.keys(contentVariables).length : 0,
         estado_twilio: result.status,
       });
     } catch (cause) {

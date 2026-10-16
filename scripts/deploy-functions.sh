@@ -100,5 +100,6 @@ Verificaciones recomendadas (ver docs/OPERACION.md):
         -H "x-cron-secret: \$CRON_SECRET" | jq
 
   · Registros de una función:
-      npx supabase functions logs process-notification-jobs
+      # La CLI no tiene 'functions logs': se leen en el panel
+      #   https://supabase.com/dashboard/project/<ref>/functions/process-notification-jobs/logs
 EOF

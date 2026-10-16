@@ -53,7 +53,16 @@ Deno.serve(async (request) => {
   // 1) Firma. Sin firma válida no se procesa nada.
   const valid = await isValidTwilioSignature({
     authToken: requireEnv("TWILIO_AUTH_TOKEN"),
-    url: webhookUrlForSignature(request, optionalEnv("TWILIO_WEBHOOK_URL")),
+    // El URL que Twilio firma es, por definición, el que le dimos como
+    // StatusCallback. Reconstruirlo a partir de la solicitud no sirve en
+    // una Edge Function: `request.url` llega sin el prefijo
+    // `/functions/v1`, así que la firma nunca coincidía y se rechazaban
+    // las llamadas legítimas. TWILIO_WEBHOOK_URL sigue estando para el
+    // caso de un proxy que publique otro URL del que registramos.
+    url: webhookUrlForSignature(
+      request,
+      optionalEnv("TWILIO_WEBHOOK_URL") || optionalEnv("TWILIO_STATUS_CALLBACK_URL"),
+    ),
     formParams,
     signature: request.headers.get("X-Twilio-Signature"),
   });

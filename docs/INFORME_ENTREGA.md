@@ -393,20 +393,20 @@ local y no se suben.
    cancelar, medidos en ~2 s y ~3 s respectivamente contra el proyecto
    `ledduijmglcfbvwuicgd`.
 
-2. **Twilio: autenticación verificada, envío pendiente de un `ContentSid`.**
-   Las credenciales se validaron contra la API (`GET /Accounts/{sid}` → 200) y
-   el `join` del Sandbox llegó. El envío con texto libre se rechaza con
-   `21654 · ContentSid Required`, comprobado con el `From` correcto del
-   Sandbox, el `To` idéntico al número del `join` y la sesión abierta once
-   minutos antes. No es un defecto de configuración: en cuenta Trial, Twilio
-   exige una de sus plantillas pre-aprobadas y no permite escribir el mensaje
-   («You won't be able to write your own message»), y el Content API, que es
-   donde se crean las propias, responde `20003` en Trial. Se puede ejercer
-   todo el encadenamiento poniendo en los `TWILIO_CONTENT_SID_*` un `HX…` de
-   los que lista la consola; los textos de § 4.1–4.3 requieren salir de Trial.
-   Lo verificado del worker es todo menos la respuesta exitosa de Twilio:
-   construye bien ambas llamadas, clasifica el 400 como permanente sin gastar
-   reintentos y lo registra en `whatsapp_messages` con su código.
+2. **Twilio: ejercido de punta a punta contra la API real** (16/10/2026).
+   Reserva → cola → despacho inmediato → `process-notification-jobs` → Twilio →
+   entrega en el teléfono → webhook de estados: el mensaje salió en 2 s y los
+   tres eventos (`sent`, `read`, `delivered`) llegaron firmados y quedaron en
+   `webhook_events`, con `whatsapp_messages` en `entregado`. Una firma
+   falsificada sigue recibiendo `403`.
+
+   Dos salvedades. El **texto** enviado es el de una plantilla de muestra de
+   Twilio, porque en cuenta Trial `ContentSid` es obligatorio y no se permite
+   escribir el mensaje propio («You won't be able to write your own message»);
+   los textos de § 4.1–4.3 requieren salir de Trial, y entonces basta cambiar
+   los tres `TWILIO_CONTENT_SID_*`. Y la **cancelación administrativa** no se
+   ha ejercido contra Twilio: lo verificado de ese tipo de mensaje sigue siendo
+   sólo `50_integrations.sql`.
 
 3. **Las plantillas de WhatsApp requieren aprobación de Meta**, que es un
    trámite externo de duración variable, y crearlas requiere además salir de

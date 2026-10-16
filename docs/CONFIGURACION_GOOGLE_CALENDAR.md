@@ -336,8 +336,8 @@ genérico «Google rechazó la solicitud».
 ### Registros
 
 ```bash
-npx supabase functions logs google-oauth-callback
-npx supabase functions logs process-calendar-jobs
+# panel → Functions → google-oauth-callback → Logs
+# panel → Functions → process-calendar-jobs → Logs
 ```
 
 Los registros son JSON con redacción obligatoria

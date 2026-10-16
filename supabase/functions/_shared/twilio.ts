@@ -124,6 +124,15 @@ export async function isValidTwilioSignature(params: {
  * en x-forwarded-*, así que se reconstruye con esos encabezados y se
  * permite fijarla explícitamente con TWILIO_WEBHOOK_URL cuando haga falta.
  */
+/**
+ * URL contra el que Twilio calculó la firma.
+ *
+ * `override` es el camino normal, no la excepción: debe recibir el URL
+ * que se registró como `StatusCallback`, porque es ése el que Twilio
+ * firma. La reconstrucción a partir de la solicitud queda como último
+ * recurso, y en una Edge Function de Supabase no basta por sí sola:
+ * `request.url` llega sin el prefijo `/functions/v1`.
+ */
 export function webhookUrlForSignature(request: Request, override: string): string {
   if (override) return override;
 

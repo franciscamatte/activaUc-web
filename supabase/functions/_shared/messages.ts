@@ -54,20 +54,96 @@ export function buildBody(kind: NotificationKind, ctx: MessageContext): string {
   }
 }
 
-/** Variables numeradas que espera la plantilla aprobada equivalente. */
+/** Campos del contexto que pueden ocupar una variable de la plantilla. */
+export const CAMPOS_PLANTILLA = ["nombre", "recinto", "fechaHora", "motivo"] as const;
+export type CampoPlantilla = typeof CAMPOS_PLANTILLA[number];
+
+/** Palabras que indican que la plantilla no lleva ninguna variable. */
+const SIN_VARIABLES = new Set(["ninguna", "ninguno", "none", "sin"]);
+
+/** Orden de variables por omisión de cada tipo de mensaje. */
+function ordenPorOmision(kind: NotificationKind): CampoPlantilla[] {
+  const base: CampoPlantilla[] = ["nombre", "recinto", "fechaHora"];
+  return kind === "cancelacion_admin" ? [...base, "motivo"] : base;
+}
+
+function valorDeCampo(campo: CampoPlantilla, ctx: MessageContext): string {
+  switch (campo) {
+    case "nombre":
+      return ctx.nombre;
+    case "recinto":
+      return ctx.recinto;
+    case "fechaHora":
+      return ctx.fechaHora;
+    case "motivo":
+      return ctx.motivo ?? "mantención del recinto";
+  }
+}
+
+/**
+ * Variables numeradas que espera la plantilla aprobada equivalente.
+ *
+ * `orden` permite adaptarse a la plantilla sin tocar el código, que hace
+ * falta por dos motivos reales:
+ *
+ *   · Las plantillas de muestra de Twilio (las únicas disponibles en una
+ *     cuenta Trial) traen el texto fijo y no aceptan variable alguna;
+ *     enviarles tres provoca un 63028.
+ *   · Una plantilla aprobada por Meta puede quedar con las variables en
+ *     otro orden que el de docs/CONFIGURACION_TWILIO_WHATSAPP.md § 4.
+ *
+ * Formatos aceptados:
+ *   · vacío o ausente → el orden por omisión del tipo de mensaje.
+ *   · «ninguna» → sin variables (devuelve null).
+ *   · «recinto,nombre,fechaHora» → ese orden exacto.
+ *
+ * Un nombre de campo desconocido lanza: es un error de configuración, y
+ * es mejor que el trabajo falle con un mensaje claro que enviar un
+ * mensaje con los datos en el lugar equivocado.
+ */
 export function buildContentVariables(
   kind: NotificationKind,
   ctx: MessageContext,
-): Record<string, string> {
-  const base: Record<string, string> = {
-    "1": ctx.nombre,
-    "2": ctx.recinto,
-    "3": ctx.fechaHora,
-  };
-  if (kind === "cancelacion_admin") {
-    base["4"] = ctx.motivo ?? "mantención del recinto";
+  orden?: string | null,
+): Record<string, string> | null {
+  const crudo = (orden ?? "").trim();
+
+  if (crudo && SIN_VARIABLES.has(crudo.toLowerCase())) {
+    return null;
   }
-  return base;
+
+  const campos: CampoPlantilla[] = crudo
+    ? crudo.split(",").map((parte) => {
+      const campo = parte.trim();
+      if (!(CAMPOS_PLANTILLA as readonly string[]).includes(campo)) {
+        throw new Error(
+          `Campo de plantilla desconocido: «${campo}». Admitidos: ` +
+            `${CAMPOS_PLANTILLA.join(", ")}, o «ninguna» para una plantilla sin variables.`,
+        );
+      }
+      return campo as CampoPlantilla;
+    })
+    : ordenPorOmision(kind);
+
+  if (campos.length === 0) return null;
+
+  const vars: Record<string, string> = {};
+  campos.forEach((campo, i) => {
+    vars[String(i + 1)] = valorDeCampo(campo, ctx);
+  });
+  return vars;
+}
+
+/** Nombre de la variable de entorno con el orden de variables. */
+export function contentVarsEnvVar(kind: NotificationKind): string {
+  switch (kind) {
+    case "confirmacion":
+      return "TWILIO_CONTENT_VARS_CONFIRMACION";
+    case "recordatorio":
+      return "TWILIO_CONTENT_VARS_RECORDATORIO";
+    case "cancelacion_admin":
+      return "TWILIO_CONTENT_VARS_CANCELACION";
+  }
 }
 
 /** Nombre de la variable de entorno con el ContentSid de cada plantilla. */

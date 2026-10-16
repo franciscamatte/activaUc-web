@@ -10,6 +10,7 @@ import {
   buildBody,
   buildContentVariables,
   contentSidEnvVar,
+  contentVarsEnvVar,
   formatSpanishDateTime,
 } from "../../supabase/functions/_shared/messages.ts";
 import { isE164, toWhatsAppAddress } from "../../supabase/functions/_shared/phone.ts";
@@ -310,6 +311,24 @@ describe("webhookUrlForSignature", () => {
       "https://ejemplo.supabase.co/functions/v1/twilio-status-webhook",
     );
   });
+
+  it("sin la URL fijada no puede reconstruir la de una Edge Function", () => {
+    // Caso real, y el motivo de que la función pase siempre el URL
+    // registrado: en una Edge Function de Supabase, `request.url` llega
+    // sin el prefijo `/functions/v1`, así que lo reconstruido no coincide
+    // con lo que Twilio firmó y las llamadas legítimas daban 403.
+    const solicitud = new Request("https://ejemplo.supabase.co/twilio-status-webhook", {
+      method: "POST",
+    });
+
+    expect(webhookUrlForSignature(solicitud, "")).not.toBe(
+      "https://ejemplo.supabase.co/functions/v1/twilio-status-webhook",
+    );
+    expect(webhookUrlForSignature(
+      solicitud,
+      "https://ejemplo.supabase.co/functions/v1/twilio-status-webhook",
+    )).toBe("https://ejemplo.supabase.co/functions/v1/twilio-status-webhook");
+  });
 });
 
 describe("plantillas de mensajes", () => {
@@ -359,13 +378,50 @@ describe("plantillas de mensajes", () => {
     });
 
     const cancelacion = buildContentVariables("cancelacion_admin", contexto);
-    expect(cancelacion["4"]).toBe("mantención del recinto");
+    expect(cancelacion?.["4"]).toBe("mantención del recinto");
+  });
+
+  it("una plantilla sin variables no recibe ninguna", () => {
+    // Las plantillas de muestra de Twilio (lo único disponible en una
+    // cuenta Trial) traen el texto fijo. Mandarles variables da 63028.
+    for (const palabra of ["ninguna", "NINGUNA", " none ", "sin"]) {
+      expect(buildContentVariables("confirmacion", contexto, palabra)).toBeNull();
+    }
+  });
+
+  it("el orden de las variables se puede configurar", () => {
+    // Una plantilla aprobada por Meta puede quedar con otro orden.
+    expect(buildContentVariables("confirmacion", contexto, "recinto,fechaHora,nombre"))
+      .toEqual({
+        "1": "Cancha de fútbol San Joaquín",
+        "2": "viernes 17 de octubre, 18:00",
+        "3": "Camila",
+      });
+
+    // Y con menos variables que los campos disponibles.
+    expect(buildContentVariables("recordatorio", contexto, " nombre , fechaHora "))
+      .toEqual({ "1": "Camila", "2": "viernes 17 de octubre, 18:00" });
+  });
+
+  it("un campo desconocido falla en lugar de enviar datos descolocados", () => {
+    expect(() => buildContentVariables("confirmacion", contexto, "nombre,cancha"))
+      .toThrow(/cancha/);
+  });
+
+  it("un orden vacío mantiene el de siempre", () => {
+    expect(buildContentVariables("confirmacion", contexto, ""))
+      .toEqual(buildContentVariables("confirmacion", contexto));
+    expect(buildContentVariables("confirmacion", contexto, null))
+      .toEqual(buildContentVariables("confirmacion", contexto));
   });
 
   it("cada tipo tiene su propia variable de ContentSid", () => {
     expect(contentSidEnvVar("confirmacion")).toBe("TWILIO_CONTENT_SID_CONFIRMACION");
     expect(contentSidEnvVar("recordatorio")).toBe("TWILIO_CONTENT_SID_RECORDATORIO");
     expect(contentSidEnvVar("cancelacion_admin")).toBe("TWILIO_CONTENT_SID_CANCELACION");
+    expect(contentVarsEnvVar("confirmacion")).toBe("TWILIO_CONTENT_VARS_CONFIRMACION");
+    expect(contentVarsEnvVar("recordatorio")).toBe("TWILIO_CONTENT_VARS_RECORDATORIO");
+    expect(contentVarsEnvVar("cancelacion_admin")).toBe("TWILIO_CONTENT_VARS_CANCELACION");
   });
 
   it("la fecha se formatea en español de Chile y en la zona indicada", () => {

@@ -222,6 +222,27 @@ TWILIO_CONTENT_SID_CANCELACION=HXcccccccccccccccccccccccccccccccc
 Con esas variables definidas, el worker usa la plantilla aprobada; sin ellas,
 cae a texto libre. El cambio no requiere modificar código.
 
+### 4.4 Si la plantilla espera otras variables
+
+El orden por omisión es el de arriba: `{{1}}` nombre, `{{2}}` recinto, `{{3}}`
+fecha y hora, y `{{4}}` el motivo en la cancelación. Cuando la plantilla
+aprobada quede con otro orden —o con menos variables—, se ajusta por
+configuración, sin tocar el código:
+
+```bash
+TWILIO_CONTENT_VARS_CONFIRMACION=recinto,fechaHora,nombre
+TWILIO_CONTENT_VARS_RECORDATORIO=nombre,fechaHora
+TWILIO_CONTENT_VARS_CANCELACION=ninguna
+```
+
+Campos admitidos: `nombre`, `recinto`, `fechaHora`, `motivo`. El valor
+`ninguna` envía la plantilla **sin** variables, que es lo que necesitan las
+plantillas de muestra de Twilio. Un campo mal escrito hace fallar el trabajo
+con un mensaje explícito, en lugar de enviar los datos descolocados.
+
+Si el número de variables no coincide con el de la plantilla, Twilio responde
+`63028`.
+
 ---
 
 ## 5. Webhook de estados
@@ -247,8 +268,20 @@ El webhook rechaza con `403` cualquier solicitud cuya firma
 `(provider, external_id, event_type)`, de modo que una reentrega del mismo
 evento se descarta: eso es la protección anti-replay.
 
-Si hay un proxy que altera el host, la URL reconstruida puede no coincidir con
-la que Twilio firmó. En ese caso, fija el valor exacto:
+**Contra qué URL se valida.** La firma de Twilio se calcula sobre el URL
+completo al que llamó, así que hay que validar contra ése. La función usa
+`TWILIO_STATUS_CALLBACK_URL` —el que le dimos como `StatusCallback`, que es por
+definición el que Twilio firma— y sólo cae en reconstruirlo a partir de la
+solicitud si no está definido.
+
+Reconstruirlo **no funciona** en una Edge Function: `request.url` llega sin el
+prefijo `/functions/v1`, así que la firma nunca coincide y se rechazan con
+`403` las llamadas legítimas. Fue un defecto real, corregido el 16/10/2026 tras
+verlo en producción, y queda fijado en `twilioWhatsapp.test.ts` › «sin la URL
+fijada no puede reconstruir la de una Edge Function».
+
+`TWILIO_WEBHOOK_URL` sigue estando, y tiene prioridad, para el caso de un proxy
+que publique un URL distinto del registrado:
 
 ```bash
 TWILIO_WEBHOOK_URL=https://<ref>.supabase.co/functions/v1/twilio-status-webhook
@@ -440,8 +473,8 @@ where created_at > now() - interval '30 days';
 ### Registros
 
 ```bash
-npx supabase functions logs process-notification-jobs
-npx supabase functions logs twilio-status-webhook
+# panel → Functions → process-notification-jobs → Logs
+# panel → Functions → twilio-status-webhook → Logs
 ```
 
 Los registros **no contienen** el Auth Token ni el teléfono completo: el

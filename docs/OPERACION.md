@@ -221,16 +221,20 @@ Conviene dejar ambas consultas como alerta programada.
 
 ## 4. Registros
 
-```bash
-npx supabase functions logs cron-dispatch
-npx supabase functions logs process-calendar-jobs
-npx supabase functions logs process-notification-jobs
-npx supabase functions logs twilio-status-webhook
-npx supabase functions logs google-oauth-callback
+Los registros de las Edge Functions se leen en el panel de Supabase, una
+función a la vez:
 
-# Seguir en vivo
-npx supabase functions logs process-notification-jobs --follow
 ```
+https://supabase.com/dashboard/project/<ref>/functions/<nombre>/logs
+```
+
+donde `<nombre>` es `cron-dispatch`, `process-calendar-jobs`,
+`process-notification-jobs`, `twilio-status-webhook` o
+`google-oauth-callback`.
+
+La CLI no sirve para esto: `supabase functions` no tiene subcomando `logs`
+(comprobado el 16/10/2026; versiones anteriores de este documento lo
+indicaban por error).
 
 ### Qué se registra y qué no
 
