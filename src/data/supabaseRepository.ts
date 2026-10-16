@@ -38,7 +38,10 @@ import type {
   ActivaRepository,
   DatosBloque,
   DatosRecinto,
+  DatosSerieBloques,
   OyenteSesion,
+  ResultadoDesactivacionSerie,
+  ResultadoSerie,
   SesionActual,
 } from "./repository";
 import {
@@ -74,6 +77,31 @@ interface RespuestaCrearReserva {
   whatsapp_recordatorio?: string;
   recordatorio_programado_para?: string | null;
   cupos_disponibles?: number;
+}
+
+/** Respuesta cruda de admin_create_block_series. */
+interface RespuestaSerie {
+  ok: boolean;
+  simulado?: boolean;
+  creados?: number;
+  omitidos_existentes?: number;
+  omitidos_pasado?: number;
+  previstos?: number;
+  primer_bloque?: string | null;
+  ultimo_bloque?: string | null;
+  muestra?: Array<{ inicio: string; fin: string }>;
+  error?: string;
+  mensaje: string;
+}
+
+/** Respuesta cruda de admin_deactivate_block_series. */
+interface RespuestaDesactivacionSerie {
+  ok: boolean;
+  simulado?: boolean;
+  afectados?: number;
+  con_reservas_vigentes?: number;
+  error?: string;
+  mensaje: string;
 }
 
 /** Respuesta cruda de cancel_reservation. */
@@ -668,6 +696,75 @@ export class SupabaseRepository implements ActivaRepository {
     if (!data || data.length === 0) {
       throw new AppError("permisos", "No administras el recinto de ese bloque.");
     }
+  }
+
+  /**
+   * REQ-30 · serie de bloques.
+   *
+   * Toda la generación ocurre en la base, en una sola transacción: un
+   * bucle de inserciones desde el navegador dejaría series a medias si
+   * se corta la conexión a la mitad.
+   */
+  async crearSerieBloques(datos: DatosSerieBloques): Promise<ResultadoSerie> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("admin_create_block_series", {
+      _facility_id: datos.recintoId,
+      _fecha_desde: datos.fechaDesde,
+      _fecha_hasta: datos.fechaHasta,
+      _horas: datos.horas,
+      _duracion_minutos: datos.duracionMinutos,
+      _capacidad: datos.capacidadMaxima,
+      _dias_semana: datos.diasSemana.length > 0 ? datos.diasSemana : null,
+      _zona: config.timeZone,
+      _simular: datos.simular,
+    });
+
+    if (error) throw aAppError(error, "crear la serie de bloques");
+
+    const r = data as RespuestaSerie;
+    return {
+      ok: r.ok,
+      simulado: r.simulado ?? datos.simular,
+      creados: r.creados ?? 0,
+      omitidosExistentes: r.omitidos_existentes ?? 0,
+      omitidosPasado: r.omitidos_pasado ?? 0,
+      previstos: r.previstos ?? 0,
+      primerBloque: r.primer_bloque ?? null,
+      ultimoBloque: r.ultimo_bloque ?? null,
+      muestra: r.muestra ?? [],
+      error: r.error,
+      mensaje: r.mensaje,
+    };
+  }
+
+  async desactivarSerieBloques(
+    recintoId: string,
+    fechaDesde: string,
+    fechaHasta: string,
+    simular: boolean,
+  ): Promise<ResultadoDesactivacionSerie> {
+    await this.exigirSesion();
+
+    const { data, error } = await this.cliente.rpc("admin_deactivate_block_series", {
+      _facility_id: recintoId,
+      _fecha_desde: fechaDesde,
+      _fecha_hasta: fechaHasta,
+      _zona: config.timeZone,
+      _simular: simular,
+    });
+
+    if (error) throw aAppError(error, "desactivar los bloques");
+
+    const r = data as RespuestaDesactivacionSerie;
+    return {
+      ok: r.ok,
+      simulado: r.simulado ?? simular,
+      afectados: r.afectados ?? 0,
+      conReservasVigentes: r.con_reservas_vigentes ?? 0,
+      error: r.error,
+      mensaje: r.mensaje,
+    };
   }
 
   /** REQ-31 · devuelve el nombre de quien reservó, nunca su correo ni teléfono. */

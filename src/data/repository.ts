@@ -53,6 +53,50 @@ export interface DatosBloque {
   activo: boolean;
 }
 
+/** Parámetros de una serie de bloques (REQ-30). */
+export interface DatosSerieBloques {
+  recintoId: string;
+  /** Fecha de inicio del rango, en formato yyyy-mm-dd. */
+  fechaDesde: string;
+  /** Fecha de término del rango, inclusive, en formato yyyy-mm-dd. */
+  fechaHasta: string;
+  /** Horas de inicio en formato HH:MM, 24 horas. */
+  horas: string[];
+  duracionMinutos: number;
+  capacidadMaxima: number;
+  /**
+   * Días de la semana a incluir: 0 = domingo … 6 = sábado.
+   * Lista vacía o ausente significa todos los días.
+   */
+  diasSemana: number[];
+  /** Si es true, no escribe nada: sólo devuelve el recuento. */
+  simular: boolean;
+}
+
+export interface ResultadoSerie {
+  ok: boolean;
+  simulado: boolean;
+  creados: number;
+  omitidosExistentes: number;
+  omitidosPasado: number;
+  previstos: number;
+  primerBloque: string | null;
+  ultimoBloque: string | null;
+  /** Los primeros bloques de la serie, para la vista previa. */
+  muestra: Array<{ inicio: string; fin: string }>;
+  error?: string;
+  mensaje: string;
+}
+
+export interface ResultadoDesactivacionSerie {
+  ok: boolean;
+  simulado: boolean;
+  afectados: number;
+  conReservasVigentes: number;
+  error?: string;
+  mensaje: string;
+}
+
 export interface ActivaRepository {
   // --- Sesión -------------------------------------------------------
   obtenerSesion(): Promise<SesionActual | null>;
@@ -101,6 +145,19 @@ export interface ActivaRepository {
   listarBloques(recintoId: string): Promise<Bloque[]>;
   crearBloque(datos: DatosBloque): Promise<void>;
   actualizarBloque(bloqueId: string, datos: Partial<DatosBloque>): Promise<void>;
+  /**
+   * REQ-30 · publica una serie de bloques de una vez.
+   * Con `simular: true` no escribe nada y devuelve el recuento, para
+   * poder mostrar una vista previa antes de confirmar.
+   */
+  crearSerieBloques(datos: DatosSerieBloques): Promise<ResultadoSerie>;
+  /** Desactiva en bloque todos los bloques de un rango de fechas. */
+  desactivarSerieBloques(
+    recintoId: string,
+    fechaDesde: string,
+    fechaHasta: string,
+    simular: boolean,
+  ): Promise<ResultadoDesactivacionSerie>;
   listarReservasAdmin(
     recintoId: string | null,
     alcance: "vigentes" | "historial" | "todas",

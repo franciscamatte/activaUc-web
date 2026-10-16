@@ -12,6 +12,7 @@ import { CampoSelect, CampoTexto } from "../../components/ui/Campo";
 import Insignia from "../../components/ui/Insignia";
 import Modal from "../../components/ui/Modal";
 import { Cargando, ErrorConReintento, SinDatos } from "../../components/ui/Estados";
+import SerieBloquesForm from "./SerieBloquesForm";
 
 interface Props {
   repositorio: ActivaRepository;
@@ -33,6 +34,7 @@ function aLocal(iso: string): string {
 /** REQ-30 · definir y modificar bloques horarios y su capacidad. */
 export default function BloquesSeccion({ repositorio, recintos }: Props) {
   const [recintoId, setRecintoId] = useState(recintos[0]?.id ?? "");
+  const recintoSeleccionado = recintos.find((r) => r.id === recintoId) ?? null;
 
   const cargar = useCallback(
     () => (recintoId ? repositorio.listarBloques(recintoId) : Promise.resolve([])),
@@ -40,6 +42,7 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
   );
   const bloques = useAsync<Bloque[]>(recintoId ? cargar : null);
 
+  const [modo, setModo] = useState<"serie" | "individual">("serie");
   const [inicio, setInicio] = useState("");
   const [fin, setFin] = useState("");
   const [capacidad, setCapacidad] = useState("10");
@@ -197,12 +200,48 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
         </Alerta>
       ) : null}
 
+      {/* Dos formas de publicar: en serie, que es lo habitual, y uno a
+          uno para casos puntuales. La serie va primero porque es la que
+          se usa el 95 % de las veces. */}
+      <div role="tablist" aria-label="Forma de publicar bloques" className="flex gap-1">
+        {([
+          { id: "serie", titulo: "En serie" },
+          { id: "individual", titulo: "Uno a uno" },
+        ] as const).map((opcion) => (
+          <button
+            key={opcion.id}
+            type="button"
+            role="tab"
+            aria-selected={modo === opcion.id}
+            onClick={() => setModo(opcion.id)}
+            className={[
+              "rounded-lg px-4 py-2 text-sm font-medium transition",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700",
+              modo === opcion.id
+                ? "bg-emerald-700 text-white"
+                : "bg-white text-slate-600 hover:bg-slate-100",
+            ].join(" ")}
+          >
+            {opcion.titulo}
+          </button>
+        ))}
+      </div>
+
+      {modo === "serie" && recintoSeleccionado ? (
+        <SerieBloquesForm
+          repositorio={repositorio}
+          recinto={recintoSeleccionado}
+          onCreada={() => bloques.recargar()}
+        />
+      ) : null}
+
       <form
         onSubmit={crear}
         noValidate
+        hidden={modo !== "individual"}
         className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"
       >
-        <h3 className="text-sm font-semibold text-slate-900">Agregar disponibilidad</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Agregar un bloque</h3>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <CampoTexto

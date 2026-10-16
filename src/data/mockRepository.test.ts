@@ -618,3 +618,242 @@ describe("administración", () => {
     expect(auditoria.some((e) => e.accion === "recinto_creado")).toBe(true);
   });
 });
+
+describe("series de bloques (REQ-30)", () => {
+  /** Fecha en formato yyyy-mm-dd, desplazada N días desde hoy. */
+  function enDias(dias: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().slice(0, 10);
+  }
+
+  const base = {
+    fechaDesde: enDias(1),
+    fechaHasta: enDias(7),
+    horas: ["08:00", "10:00"],
+    duracionMinutos: 60,
+    capacidadMaxima: 20,
+    diasSemana: [] as number[],
+    simular: false,
+  };
+
+  /**
+   * Crea un recinto nuevo para cada prueba.
+   *
+   * Los recintos de la semilla ya traen bloques publicados (y uno de
+   * ellos en el pasado), así que usarlos haría que las series se
+   * omitieran por duplicado y falsearía los recuentos. Partir de un
+   * recinto vacío deja las aserciones libres de ese ruido.
+   */
+  let contador = 0;
+  async function recintoPropio(): Promise<string> {
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    contador += 1;
+
+    const creado = await repo.crearRecinto({
+      nombre: `Recinto Serie ${contador}`,
+      tipo: "Fútbol",
+      descripcion: "",
+      horarioFuncionamiento: "",
+      activo: true,
+    });
+    expect(creado.ok).toBe(true);
+
+    const recintos = await repo.listarRecintosAsignados();
+    const recinto = recintos.find((r) => r.nombre === `Recinto Serie ${contador}`)!;
+    expect(await repo.listarBloques(recinto.id)).toHaveLength(0);
+    return recinto.id;
+  }
+
+  it("exige ser administrador del recinto", async () => {
+    const recintoId = await recintoPropio();
+    await repo.iniciarSesion(CORREO, CLAVE);
+
+    await expect(
+      repo.crearSerieBloques({ ...base, recintoId }),
+    ).rejects.toThrow(/administras ese recinto/);
+  });
+
+  it("la simulación cuenta sin escribir nada", async () => {
+    const recintoId = await recintoPropio();
+    const antes = (await repo.listarBloques(recintoId)).length;
+
+    const previa = await repo.crearSerieBloques({ ...base, recintoId, simular: true });
+
+    expect(previa.ok).toBe(true);
+    expect(previa.simulado).toBe(true);
+    expect(previa.creados).toBe(14);
+    expect(previa.muestra).toHaveLength(5);
+    expect((await repo.listarBloques(recintoId)).length).toBe(antes);
+  });
+
+  it("crea la serie completa con su duración y capacidad", async () => {
+    const recintoId = await recintoPropio();
+    const antes = (await repo.listarBloques(recintoId)).length;
+
+    const resultado = await repo.crearSerieBloques({ ...base, recintoId });
+
+    expect(resultado.creados).toBe(14);
+    const bloques = await repo.listarBloques(recintoId);
+    expect(bloques.length).toBe(antes + 14);
+
+    const nuevos = bloques.filter(
+      (b) => b.capacidadMaxima === 20 && new Date(b.inicio).getTime() > Date.now(),
+    );
+    expect(nuevos.length).toBeGreaterThanOrEqual(14);
+    for (const bloque of nuevos) {
+      const minutos =
+        (new Date(bloque.fin).getTime() - new Date(bloque.inicio).getTime()) / 60000;
+      expect(minutos).toBe(60);
+    }
+  });
+
+  it("repetir la misma serie no duplica bloques", async () => {
+    const recintoId = await recintoPropio();
+    await repo.crearSerieBloques({ ...base, recintoId });
+    const despuesDeLaPrimera = (await repo.listarBloques(recintoId)).length;
+
+    const segunda = await repo.crearSerieBloques({ ...base, recintoId });
+
+    expect(segunda.creados).toBe(0);
+    expect(segunda.omitidosExistentes).toBe(14);
+    expect((await repo.listarBloques(recintoId)).length).toBe(despuesDeLaPrimera);
+  });
+
+  it("extender el rango sólo crea lo que falta", async () => {
+    const recintoId = await recintoPropio();
+    await repo.crearSerieBloques({ ...base, recintoId });
+
+    const extendida = await repo.crearSerieBloques({
+      ...base,
+      recintoId,
+      fechaHasta: enDias(14),
+    });
+
+    expect(extendida.omitidosExistentes).toBe(14);
+    expect(extendida.creados).toBeGreaterThan(0);
+  });
+
+  it("filtra por días de la semana", async () => {
+    const recintoId = await recintoPropio();
+
+    const resultado = await repo.crearSerieBloques({
+      ...base,
+      recintoId,
+      horas: ["09:00"],
+      diasSemana: [1],
+    });
+
+    expect(resultado.creados).toBe(1);
+    expect(new Date(resultado.primerBloque!).getDay()).toBe(1);
+  });
+
+  it("omite los bloques que caen en el pasado", async () => {
+    const recintoId = await recintoPropio();
+
+    const resultado = await repo.crearSerieBloques({
+      ...base,
+      recintoId,
+      fechaDesde: enDias(-3),
+      fechaHasta: enDias(1),
+      horas: ["08:00"],
+    });
+
+    expect(resultado.omitidosPasado).toBeGreaterThan(0);
+    const bloques = await repo.listarBloques(recintoId);
+    for (const bloque of bloques) {
+      expect(new Date(bloque.inicio).getTime()).toBeGreaterThan(Date.now());
+    }
+  });
+
+  it("rechaza parámetros inválidos con el mismo código que el backend", async () => {
+    const recintoId = await recintoPropio();
+
+    const casos: Array<[Partial<typeof base>, string]> = [
+      [{ fechaDesde: enDias(7), fechaHasta: enDias(1) }, "rango_invertido"],
+      [{ fechaHasta: enDias(400) }, "rango_demasiado_largo"],
+      [{ horas: [] }, "sin_horas"],
+      [{ horas: ["25:00"] }, "hora_invalida"],
+      [{ horas: ["8:00"] }, "hora_invalida"],
+      [{ duracionMinutos: 5 }, "duracion_invalida"],
+      [{ duracionMinutos: 900 }, "duracion_invalida"],
+      [{ capacidadMaxima: 0 }, "capacidad_invalida"],
+      [{ capacidadMaxima: 2000 }, "capacidad_invalida"],
+      [{ diasSemana: [9] }, "dia_invalido"],
+    ];
+
+    for (const [parcial, esperado] of casos) {
+      const resultado = await repo.crearSerieBloques({ ...base, recintoId, ...parcial });
+      expect(resultado.ok, `con ${JSON.stringify(parcial)}`).toBe(false);
+      expect(resultado.error, `con ${JSON.stringify(parcial)}`).toBe(esperado);
+    }
+
+    const bloques = await repo.listarBloques(recintoId);
+    expect(bloques.every((b) => b.capacidadMaxima !== 2000)).toBe(true);
+  });
+
+  it("respeta el tope de bloques por operación", async () => {
+    const recintoId = await recintoPropio();
+
+    const resultado = await repo.crearSerieBloques({
+      ...base,
+      recintoId,
+      fechaHasta: enDias(300),
+      horas: ["06:00", "08:00", "10:00", "12:00", "14:00"],
+    });
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.error).toBe("demasiados_bloques");
+    expect(resultado.mensaje).toContain("1000");
+  });
+
+  it("avisa cuando ninguna fecha coincide con los días elegidos", async () => {
+    const recintoId = await recintoPropio();
+
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    const diaOpuesto = (manana.getDay() + 3) % 7;
+
+    const resultado = await repo.crearSerieBloques({
+      ...base,
+      recintoId,
+      fechaDesde: enDias(1),
+      fechaHasta: enDias(1),
+      diasSemana: [diaOpuesto],
+    });
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.error).toBe("serie_vacia");
+  });
+
+  it("desactiva en serie y avisa de las reservas vigentes", async () => {
+    const recintoId = await recintoPropio();
+    await repo.crearSerieBloques({ ...base, recintoId });
+
+    const bloques = await repo.listarBloques(recintoId);
+    const futuro = bloques.find(
+      (b) => b.activo && new Date(b.inicio).getTime() - Date.now() > 3 * 3600000,
+    )!;
+
+    await repo.iniciarSesion(CORREO, CLAVE);
+    const reserva = await repo.crearReserva(futuro.id);
+    expect(reserva.ok).toBe(true);
+
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+
+    const previa = await repo.desactivarSerieBloques(
+      recintoId, base.fechaDesde, base.fechaHasta, true,
+    );
+    expect(previa.afectados).toBeGreaterThan(0);
+    expect(previa.conReservasVigentes).toBe(1);
+    expect((await repo.listarBloques(recintoId)).some((b) => b.activo)).toBe(true);
+
+    const real = await repo.desactivarSerieBloques(
+      recintoId, base.fechaDesde, base.fechaHasta, false,
+    );
+    expect(real.afectados).toBe(previa.afectados);
+
+    const reservas = await repo.listarReservasAdmin(recintoId, "todas");
+    expect(reservas.find((r) => r.id === reserva.reservaId)?.estado).toBe("vigente");
+  });
+});

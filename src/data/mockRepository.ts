@@ -41,7 +41,10 @@ import type {
   ActivaRepository,
   DatosBloque,
   DatosRecinto,
+  DatosSerieBloques,
   OyenteSesion,
+  ResultadoDesactivacionSerie,
+  ResultadoSerie,
   SesionActual,
 } from "./repository";
 import { crearDatosDemo, type EstadoDemo } from "./seed";
@@ -775,6 +778,216 @@ export class MockRepository implements ActivaRepository {
       actorRol: "administrador",
     });
     this.guardar();
+  }
+
+  /**
+   * REQ-30 · serie de bloques.
+   *
+   * Replica las reglas de public.admin_create_block_series: omite los
+   * bloques ya existentes y los que caen en el pasado, y respeta el
+   * mismo tope por operación. Las validaciones devuelven los mismos
+   * códigos de error, para que la interfaz se comporte igual en los dos
+   * modos.
+   */
+  async crearSerieBloques(datos: DatosSerieBloques): Promise<ResultadoSerie> {
+    const cuenta = this.cuentaActual();
+    const asignado = this.estado.asignaciones.some(
+      (a) => a.administradorId === cuenta.id && a.recintoId === datos.recintoId,
+    );
+    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+
+    const fallo = (error: string, mensaje: string): ResultadoSerie => ({
+      ok: false, simulado: datos.simular, creados: 0, omitidosExistentes: 0,
+      omitidosPasado: 0, previstos: 0, primerBloque: null, ultimoBloque: null,
+      muestra: [], error, mensaje,
+    });
+
+    const desde = new Date(`${datos.fechaDesde}T00:00:00`);
+    const hasta = new Date(`${datos.fechaHasta}T00:00:00`);
+
+    if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime())) {
+      return fallo("fechas_incompletas", "Indica la fecha de inicio y la de término de la serie.");
+    }
+    if (hasta < desde) {
+      return fallo("rango_invertido", "La fecha de término debe ser igual o posterior a la de inicio.");
+    }
+    if ((hasta.getTime() - desde.getTime()) / 86_400_000 > 366) {
+      return fallo("rango_demasiado_largo", "El rango no puede superar un año. Crea la serie por temporadas.");
+    }
+    if (datos.horas.length === 0) {
+      return fallo("sin_horas", "Indica al menos una hora de inicio, por ejemplo 08:00.");
+    }
+    if (datos.horas.length > 24) {
+      return fallo("demasiadas_horas", "Como máximo 24 horas de inicio por serie.");
+    }
+    for (const hora of datos.horas) {
+      if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(hora)) {
+        return fallo("hora_invalida", `La hora «${hora}» no tiene el formato HH:MM (24 horas).`);
+      }
+    }
+    if (datos.duracionMinutos < 15 || datos.duracionMinutos > 720) {
+      return fallo("duracion_invalida", "La duración debe estar entre 15 minutos y 12 horas.");
+    }
+    if (datos.capacidadMaxima < 1 || datos.capacidadMaxima > 1000) {
+      return fallo("capacidad_invalida", "La capacidad debe estar entre 1 y 1000 personas.");
+    }
+    if (datos.diasSemana.some((d) => d < 0 || d > 6)) {
+      return fallo("dia_invalido", "Los días de la semana van de 0 (domingo) a 6 (sábado).");
+    }
+
+    const dias = datos.diasSemana.length > 0 ? datos.diasSemana : [0, 1, 2, 3, 4, 5, 6];
+
+    const fechas: Date[] = [];
+    for (let d = new Date(desde); d <= hasta; d.setDate(d.getDate() + 1)) {
+      if (dias.includes(d.getDay())) fechas.push(new Date(d));
+    }
+
+    const previstos = fechas.length * datos.horas.length;
+    if (previstos > 1000) {
+      return fallo("demasiados_bloques",
+        `La serie generaría ${previstos} bloques y el máximo por operación es 1000. ` +
+        `Acorta el rango o reduce las horas.`);
+    }
+    if (previstos === 0) {
+      return fallo("serie_vacia", "Ninguna fecha del rango coincide con los días de la semana elegidos.");
+    }
+
+    const ahora = Date.now();
+    let creados = 0;
+    let omitidosExistentes = 0;
+    let omitidosPasado = 0;
+    let primerBloque: string | null = null;
+    let ultimoBloque: string | null = null;
+    const muestra: Array<{ inicio: string; fin: string }> = [];
+
+    for (const fecha of fechas) {
+      for (const hora of datos.horas) {
+        const [h, m] = hora.split(":").map(Number);
+        const inicio = new Date(fecha);
+        inicio.setHours(h, m, 0, 0);
+        const fin = new Date(inicio.getTime() + datos.duracionMinutos * 60_000);
+        const inicioIso = inicio.toISOString();
+
+        if (inicio.getTime() <= ahora) {
+          omitidosPasado += 1;
+          continue;
+        }
+
+        const yaExiste = this.estado.bloques.some(
+          (b) => b.recintoId === datos.recintoId && b.activo && b.inicio === inicioIso,
+        );
+        if (yaExiste) {
+          omitidosExistentes += 1;
+          continue;
+        }
+
+        if (!datos.simular) {
+          this.estado.bloques.push({
+            id: crypto.randomUUID(),
+            recintoId: datos.recintoId,
+            inicio: inicioIso,
+            fin: fin.toISOString(),
+            capacidadMaxima: datos.capacidadMaxima,
+            activo: true,
+          });
+        }
+
+        creados += 1;
+        if (primerBloque === null) primerBloque = inicioIso;
+        ultimoBloque = inicioIso;
+        if (muestra.length < 5) {
+          muestra.push({ inicio: inicioIso, fin: fin.toISOString() });
+        }
+      }
+    }
+
+    if (!datos.simular && creados > 0) {
+      this.auditar({
+        recintoId: datos.recintoId,
+        accion: "bloque_creado",
+        actorRol: "administrador",
+        detalles: { serie: true, creados, modo: "demostracion" },
+      });
+      this.guardar();
+    }
+
+    return {
+      ok: true,
+      simulado: datos.simular,
+      creados,
+      omitidosExistentes,
+      omitidosPasado,
+      previstos,
+      primerBloque,
+      ultimoBloque,
+      muestra,
+      mensaje:
+        creados === 0 && omitidosExistentes > 0
+          ? "Todos los bloques de la serie ya existían: no se creó ninguno nuevo."
+          : creados === 0
+            ? "No había ningún bloque que crear en ese rango."
+            : datos.simular
+              ? `Se crearían ${creados} bloques.`
+              : `Se crearon ${creados} bloques.`,
+    };
+  }
+
+  async desactivarSerieBloques(
+    recintoId: string,
+    fechaDesde: string,
+    fechaHasta: string,
+    simular: boolean,
+  ): Promise<ResultadoDesactivacionSerie> {
+    const cuenta = this.cuentaActual();
+    const asignado = this.estado.asignaciones.some(
+      (a) => a.administradorId === cuenta.id && a.recintoId === recintoId,
+    );
+    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+
+    const desde = new Date(`${fechaDesde}T00:00:00`).getTime();
+    const hasta = new Date(`${fechaHasta}T23:59:59.999`).getTime();
+
+    if (Number.isNaN(desde) || Number.isNaN(hasta) || hasta < desde) {
+      return {
+        ok: false, simulado: simular, afectados: 0, conReservasVigentes: 0,
+        error: "rango_invalido", mensaje: "Indica un rango de fechas válido.",
+      };
+    }
+
+    const enRango = this.estado.bloques.filter((b) => {
+      const t = new Date(b.inicio).getTime();
+      return b.recintoId === recintoId && b.activo && t >= desde && t <= hasta;
+    });
+
+    const conReservas = new Set(
+      this.estado.reservas
+        .filter((r) => r.estado === "vigente" && enRango.some((b) => b.id === r.bloqueId))
+        .map((r) => r.bloqueId),
+    ).size;
+
+    if (!simular && enRango.length > 0) {
+      for (const bloque of enRango) bloque.activo = false;
+      this.auditar({
+        recintoId,
+        accion: "bloque_desactivado",
+        actorRol: "administrador",
+        detalles: { serie: true, desactivados: enRango.length, modo: "demostracion" },
+      });
+      this.guardar();
+    }
+
+    return {
+      ok: true,
+      simulado: simular,
+      afectados: enRango.length,
+      conReservasVigentes: conReservas,
+      mensaje:
+        enRango.length === 0
+          ? "No hay bloques activos en ese rango."
+          : simular
+            ? `Se desactivarían ${enRango.length} bloques.`
+            : `Se desactivaron ${enRango.length} bloques.`,
+    };
   }
 
   async listarReservasAdmin(
