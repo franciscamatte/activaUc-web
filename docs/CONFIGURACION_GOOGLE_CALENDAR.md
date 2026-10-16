@@ -203,7 +203,9 @@ sería un incidente de seguridad.
 
 1. Reserva un bloque cualquiera.
 2. En **Mis reservas**, la insignia debe decir **Calendar: Pendiente**.
-3. Espera hasta un minuto (lo que tarda `pg_cron`) o dispáralo a mano:
+3. Espera unos segundos: el trabajo se despacha en cuanto se encola, no en el
+   siguiente ciclo de `pg_cron`. Si pasa más de un minuto, algo falla y puedes
+   dispararlo a mano para ver el error:
 
 ```bash
 curl -s -X POST "https://<ref>.supabase.co/functions/v1/cron-dispatch" \

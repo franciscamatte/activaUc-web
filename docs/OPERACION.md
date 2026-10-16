@@ -37,6 +37,38 @@ where jobname like 'activauc%';
 | `activauc_integraciones` | `* * * * *` (cada minuto) | Invoca `cron-dispatch`, que a su vez corre los dos workers. Los recordatorios salen cuando su `scheduled_for` vence |
 | `activauc_limpieza` | `17 * * * *` (cada hora) | Borra `oauth_states` vencidos, contadores de límite viejos y webhooks de más de 90 días |
 
+### El cron no es la vía normal
+
+Un minuto de espera sería inaceptable para quien acaba de reservar, así que el
+trabajo no espera al cron: cuatro disparadores por sentencia sobre
+`calendar_sync_jobs` y `notification_jobs` (migración `…000600`) invocan el
+worker en el mismo instante en que se encola algo listo para ejecutar. Medido
+contra el proyecto real, el evento aparece en Google Calendar en ~2 s y
+desaparece en ~3 s al cancelar.
+
+El cron sigue siendo imprescindible, para lo que el disparador no puede cubrir:
+
+- reintentos con retroceso exponencial de lo que falló,
+- recordatorios cuyo `scheduled_for` vence horas después,
+- rescate de trabajos cuyo worker murió a mitad,
+- y como red de seguridad si un disparo puntual se pierde.
+
+El despacho va envuelto en su propio bloque de excepciones: si `pg_net` no está
+instalado, falta configuración o la petición no sale, se registra un `notice` y
+la reserva se crea igual. **Un fallo de la integración nunca impide reservar**
+(probado en `supabase/tests/70_despacho_inmediato.sql`). El coste de eso es que
+un fallo del disparador es silencioso, de ahí que convenga mirar la antigüedad
+de los trabajos pendientes:
+
+```sql
+select kind, status, count(*),
+       max(date_trunc('second', now() - created_at)) as mas_viejo
+from public.calendar_sync_jobs group by 1, 2 order by 1, 2;
+```
+
+Si ves pendientes de más de un par de minutos, el que está fallando es el cron,
+no el disparador.
+
 ### Historial de ejecuciones
 
 ```sql

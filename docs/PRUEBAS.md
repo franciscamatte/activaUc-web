@@ -21,7 +21,7 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**214 pruebas en 8 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**225 pruebas en 8 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
@@ -92,7 +92,7 @@ fallar con un error de conexión en bruto.
    Supabase: esquema `auth`, `auth.uid()`, y los roles `anon`,
    `authenticated` y `service_role` (este último con `BYPASSRLS`, igual que en
    Supabase).
-3. Aplica las cuatro migraciones **en el mismo orden que la CLI**.
+3. Aplica las seis migraciones **en el mismo orden que la CLI**.
 4. Ejecuta cada archivo de prueba en su propia transacción, que **revierte** al
    terminar: las pruebas no se contaminan entre sí.
 5. Elimina la base.
@@ -109,6 +109,8 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 | `30_cancellations.sql` | Ventana de 2 h; cancelación de reserva ajena (debe fallar); reserva iniciada y vencida; idempotencia de cancelar dos veces; administrador no asignado (debe fallar); administrador asignado sin ventana; aviso por WhatsApp; cupo liberado disponible al instante; encolado de eliminación de eventos en sus dos casos |
 | `40_rls.sql` | Con los roles `anon` y `authenticated` **reales**: disponibilidad pública sin datos personales; aislamiento de perfiles y reservas; imposibilidad de escribir en `reservations`; imposibilidad de escalar el rol; tokens OAuth inaccesibles; administrador acotado a sus recintos; colas y webhooks reservados al backend; y una comprobación final de que ningún intento de escritura cruzada surtió efecto |
 | `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad de WhatsApp; **idempotencia del webhook y no retroceso de «entregado»**; reintentos y fallos definitivos; revocación de consentimiento; recuperación de trabajos interrumpidos; informe de integraciones |
+| `60_block_series.sql` | Creación de series (REQ-30): autorización sólo al administrador asignado; validaciones que rechazan antes de escribir; vista previa que cuenta sin escribir; serie diaria y por días de la semana **en hora local de Santiago**; repetir la serie no duplica; extender respeta lo publicado; bloques en el pasado omitidos sin fallar; desactivación en serie que conserva las reservas confirmadas |
+| `70_despacho_inmediato.sql` | Los cuatro disparadores de despacho existen y son **por sentencia**; reservar y cancelar siguen funcionando con ellos puestos; y, lo que importa, **un fallo del despacho no impide reservar**: el trabajo queda encolado para que lo recoja el cron |
 
 Las aserciones usan el `ASSERT` de PL/pgSQL: si una condición falla, la
 sentencia lanza y el script reporta el archivo y el mensaje exactos.
@@ -129,8 +131,10 @@ sentencia lanza y el script reporta el archivo y el mensaje exactos.
 ✔ 30_cancellations.sql
 ✔ 40_rls.sql
 ✔ 50_integrations.sql
+✔ 60_block_series.sql
+✔ 70_despacho_inmediato.sql
 
-✔ 5 archivos de prueba superados
+✔ 7 archivos de prueba superados
 ```
 
 ---

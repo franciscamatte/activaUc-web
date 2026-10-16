@@ -131,7 +131,7 @@ En **Database → Extensions** activa:
 | Extensión | Para qué |
 |---|---|
 | `pgcrypto` | `gen_random_uuid()` (la migración la instala sola) |
-| `pg_cron` | Ejecutar los workers de integración cada minuto |
+| `pg_cron` | Red de seguridad de los workers: reintentos, recordatorios vencidos y trabajos huérfanos (el caso normal lo despacha un disparador al instante) |
 | `pg_net` | Que `pg_cron` pueda invocar las Edge Functions por HTTP |
 
 `pg_cron` y `pg_net` no se activan desde las migraciones a propósito: requieren
@@ -299,7 +299,7 @@ Deja dos tareas programadas:
 
 | Tarea | Frecuencia | Qué hace |
 |---|---|---|
-| `activauc_integraciones` | cada minuto | Dispara los workers de Calendar y WhatsApp, incluidos los recordatorios vencidos |
+| `activauc_integraciones` | cada minuto | Dispara los workers de Calendar y WhatsApp: reintentos, recordatorios vencidos y trabajos huérfanos. Lo recién encolado no espera aquí, lo despacha un disparador |
 | `activauc_limpieza` | cada hora (min. 17) | Borra `oauth_states` vencidos, contadores viejos y webhooks de más de 90 días |
 
 Verifica:

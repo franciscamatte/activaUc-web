@@ -17,7 +17,9 @@ create_reservation_strict
    ├─► notification_jobs (confirmacion, scheduled_for = ahora)
    └─► notification_jobs (recordatorio,  scheduled_for = inicio − 2 h)
                              │
-   pg_cron (cada minuto) ──► cron-dispatch ──► process-notification-jobs
+   disparador al encolar ───► cron-dispatch ──► process-notification-jobs
+   y pg_cron cada minuto     │
+   (vencidos y reintentos)   │
                              │ claim_notification_jobs:
                              │  · scheduled_for ya venció
                              │  · consentimiento vigente

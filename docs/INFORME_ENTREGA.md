@@ -195,7 +195,7 @@ distintos por entorno y no deben versionarse.
 | `process-calendar-jobs` | no | Crea y elimina eventos con reintentos. Renueva el access token solo |
 | `process-notification-jobs` | no | Envía por Twilio validando consentimiento y E.164 |
 | `twilio-status-webhook` | no | Actualiza los estados de entrega. Valida firma; idempotente |
-| `cron-dispatch` | no | Punto único que `pg_cron` invoca cada minuto |
+| `cron-dispatch` | no | Punto único de entrada a los workers: lo invoca un disparador en cuanto se encola un trabajo, y `pg_cron` cada minuto como red de seguridad |
 
 Las que no verifican JWT se autentican por su cuenta: `state` firmado, firma de
 Twilio o `x-cron-secret`, siempre con comparación en tiempo constante. Si
@@ -303,12 +303,12 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  214 passed (214)
+     Tests  225 passed (225)
 ```
 
 | Archivo | Pruebas |
 |---|---|
-| `src/data/mockRepository.test.ts` | 47 |
+| `src/data/mockRepository.test.ts` | 58 |
 | `src/domain/reservationRules.test.ts` | 34 |
 | `src/test/twilioWhatsapp.test.ts` | 35 |
 | `src/test/oauthCrypto.test.ts` | 24 |
@@ -321,9 +321,10 @@ Test Files  8 passed (8)
 
 ```
 ✔ 10_schema.sql        ✔ 30_cancellations.sql   ✔ 50_integrations.sql
-✔ 20_reservations.sql  ✔ 40_rls.sql
+✔ 20_reservations.sql  ✔ 40_rls.sql             ✔ 60_block_series.sql
+                                                ✔ 70_despacho_inmediato.sql
 
-✔ 5 archivos de prueba superados
+✔ 7 archivos de prueba superados
 ```
 
 Cada archivo corre en su propia transacción, que se revierte. El arranque
@@ -419,8 +420,16 @@ local y no se suben.
    `@testing-library/react` y un DOM simulado a cambio de verificar menos de lo
    que verifican las pruebas de concurrencia y RLS.
 
-8. **Carga masiva de bloques.** Hoy se crean uno a uno desde el panel. Para una
-   temporada completa conviene un script, hoy inexistente.
+8. **Las series no se editan como serie.** `admin_create_block_series` crea una
+   temporada completa de una vez y `admin_deactivate_block_series` la retira en
+   bloque, pero cambiar la capacidad de una serie ya publicada sigue siendo
+   bloque por bloque: no se guarda la identidad de la serie, sólo sus bloques.
+
+9. **Un fallo del despacho inmediato es silencioso.** El disparador que invoca
+   el worker al encolar va envuelto para que un problema de la integración no
+   pueda impedir una reserva, así que el fallo sale como `notice` y no como
+   error. El cron recoge el trabajo hasta un minuto después, de modo que el
+   efecto visible es la latencia de antes, no una pérdida.
 
 ---
 
