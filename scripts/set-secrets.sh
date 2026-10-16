@@ -34,16 +34,31 @@ done
 # ---------------------------------------------------------------------
 # Secretos que usan las Edge Functions.
 # ---------------------------------------------------------------------
+# Núcleo: sin esto no funciona nada del backend.
 OBLIGATORIOS=(
   ENCRYPTION_KEY            # clave AES-256-GCM en base64 (32 bytes)
   CRON_SECRET               # autentica a pg_cron frente a los workers
+  APP_URL                   # origen público del frontend
+)
+
+# Cada integración se carga por separado, y es todo o nada dentro de su
+# grupo: media credencial de Google no sirve de nada y además produciría
+# fallos confusos en tiempo de ejecución.
+#
+# Que una integración falte no es un error: las Edge Functions
+# correspondientes responden «integración no configurada» y el resto del
+# sistema sigue funcionando. Así se puede poner en marcha Calendar
+# primero y WhatsApp más adelante, sin tocar nada.
+GRUPO_GOOGLE=(
   GOOGLE_CLIENT_ID
   GOOGLE_CLIENT_SECRET
   GOOGLE_REDIRECT_URI
+)
+
+GRUPO_TWILIO=(
   TWILIO_ACCOUNT_SID
   TWILIO_AUTH_TOKEN
   TWILIO_WHATSAPP_FROM
-  APP_URL                   # origen público del frontend
 )
 
 OPCIONALES=(
@@ -76,8 +91,22 @@ fi
 # ---------------------------------------------------------------------
 # Validación antes de subir nada.
 # ---------------------------------------------------------------------
+# Node sólo está disponible dentro de WSL en algunos equipos, así que la
+# CLI se resuelve igual que en el resto de los scripts.
+AQUI_SECRETS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/node-env.sh
+source "$AQUI_SECRETS/lib/node-env.sh"
+
+# El archivo se lee desde una copia sin retornos de carro: editado en
+# Windows, cada valor arrastraría un \r invisible que viajaría hasta los
+# secretos de Supabase y rompería, por ejemplo, la comparación del
+# CRON_SECRET o el URI de redirección de Google.
+COPIA_LIMPIA="$(mktemp)"
+trap 'rm -f "$COPIA_LIMPIA"' EXIT
+tr -d '\r' < "$ARCHIVO" > "$COPIA_LIMPIA"
+
 # shellcheck disable=SC1090
-set -a; source "$ARCHIVO"; set +a
+set -a; source "$COPIA_LIMPIA"; set +a
 
 FALTANTES=()
 for nombre in "${OBLIGATORIOS[@]}"; do
@@ -87,10 +116,56 @@ for nombre in "${OBLIGATORIOS[@]}"; do
 done
 
 if [[ ${#FALTANTES[@]} -gt 0 ]]; then
-  echo "Faltan secretos obligatorios en $ARCHIVO:" >&2
+  echo "Faltan secretos del núcleo en $ARCHIVO:" >&2
   for nombre in "${FALTANTES[@]}"; do echo "  · $nombre" >&2; done
   exit 1
 fi
+
+# ---------------------------------------------------------------------
+# Integraciones: cada grupo es todo o nada, pero su ausencia no es un
+# error. Lo que no se cargue deja su Edge Function respondiendo
+# «integración no configurada», que es el comportamiento previsto.
+# ---------------------------------------------------------------------
+GRUPOS_COMPLETOS=()
+
+evaluar_grupo() {
+  local etiqueta="$1"; shift
+  local claves=("$@")
+  local definidas=0 ausentes=()
+
+  for nombre in "${claves[@]}"; do
+    if [[ -n "${!nombre:-}" ]]; then
+      definidas=$((definidas + 1))
+    else
+      ausentes+=("$nombre")
+    fi
+  done
+
+  if [[ "$definidas" -eq "${#claves[@]}" ]]; then
+    echo "  $etiqueta: completa"
+    GRUPOS_COMPLETOS+=("${claves[@]}")
+    return 0
+  fi
+
+  if [[ "$definidas" -eq 0 ]]; then
+    echo "  $etiqueta: sin configurar (se omite)"
+    return 0
+  fi
+
+  # Lo peligroso es el caso intermedio: media credencial produce fallos
+  # en tiempo de ejecución difíciles de diagnosticar.
+  echo "" >&2
+  echo "La integración «$etiqueta» está a medias en $ARCHIVO." >&2
+  echo "Faltan:" >&2
+  for nombre in "${ausentes[@]}"; do echo "  · $nombre" >&2; done
+  echo "Complétala o deja todas sus variables vacías." >&2
+  exit 1
+}
+
+echo "Integraciones detectadas:"
+evaluar_grupo "Google Calendar" "${GRUPO_GOOGLE[@]}"
+evaluar_grupo "Twilio WhatsApp" "${GRUPO_TWILIO[@]}"
+echo ""
 
 for nombre in "${RESERVADOS[@]}"; do
   if [[ -n "${!nombre:-}" ]]; then
@@ -121,12 +196,30 @@ if [[ ${#CRON_SECRET} -lt 24 ]]; then
   exit 1
 fi
 
-if [[ "$GOOGLE_REDIRECT_URI" != https://* && "$GOOGLE_REDIRECT_URI" != http://localhost* ]]; then
-  echo "GOOGLE_REDIRECT_URI debe usar https:// (o http://localhost en desarrollo)." >&2
-  exit 1
+if [[ -n "${GOOGLE_REDIRECT_URI:-}" ]]; then
+  if [[ "$GOOGLE_REDIRECT_URI" != https://* && "$GOOGLE_REDIRECT_URI" != http://localhost* && "$GOOGLE_REDIRECT_URI" != http://127.0.0.1* ]]; then
+    echo "GOOGLE_REDIRECT_URI debe usar https:// (o http://localhost en desarrollo)." >&2
+    exit 1
+  fi
+  # El callback vive en una Edge Function, no en el frontend: apuntarlo
+  # al sitio web es el error más habitual y da «redirect_uri_mismatch».
+  if [[ "$GOOGLE_REDIRECT_URI" != */functions/v1/google-oauth-callback ]]; then
+    echo "" >&2
+    echo "GOOGLE_REDIRECT_URI no termina en /functions/v1/google-oauth-callback." >&2
+    echo "Debe apuntar a la Edge Function, no al frontend. Valor actual:" >&2
+    echo "  $GOOGLE_REDIRECT_URI" >&2
+    exit 1
+  fi
 fi
 
-echo "Validación correcta: ${#OBLIGATORIOS[@]} secretos obligatorios presentes."
+if [[ -n "${TWILIO_WHATSAPP_FROM:-}" ]]; then
+  if [[ ! "$TWILIO_WHATSAPP_FROM" =~ ^\+[1-9][0-9]{7,14}$ ]]; then
+    echo "TWILIO_WHATSAPP_FROM debe estar en formato E.164, por ejemplo +14155238886." >&2
+    exit 1
+  fi
+fi
+
+echo "Validación correcta."
 
 if [[ "$SOLO_VERIFICAR" -eq 1 ]]; then
   echo "Modo verificación: no se cargó nada."
@@ -140,7 +233,7 @@ ARGS=()
 [[ -n "$PROYECTO" ]] && ARGS+=(--project-ref "$PROYECTO")
 
 PARES=()
-for nombre in "${OBLIGATORIOS[@]}" "${OPCIONALES[@]}"; do
+for nombre in "${OBLIGATORIOS[@]}" "${GRUPOS_COMPLETOS[@]}" "${OPCIONALES[@]}"; do
   valor="${!nombre:-}"
   [[ -z "$valor" ]] && continue
   PARES+=("$nombre=$valor")

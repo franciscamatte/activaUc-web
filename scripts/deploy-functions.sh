@@ -12,6 +12,13 @@
 # =====================================================================
 set -euo pipefail
 
+# Node sólo está disponible dentro de WSL en algunos equipos, así que la
+# CLI se resuelve igual que en el resto de los scripts.
+AQUI_DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/node-env.sh
+source "$AQUI_DEPLOY/lib/node-env.sh"
+cd "$(dirname "$AQUI_DEPLOY")"
+
 PROYECTO=""
 SOLO=""
 
