@@ -49,8 +49,19 @@ create_reservation_strict
 El Sandbox permite probar el flujo completo sin trámites de aprobación.
 
 1. Consola → **Messaging → Try it out → Send a WhatsApp message**.
-2. Verás un número (normalmente `+1 415 523 8886`) y un código como
-   `join <dos-palabras>`.
+2. Verás un número y un código como `join <dos-palabras>`.
+
+   > **El número del Sandbox depende de la cuenta.** El `+1 415 523 8886`
+   > que circula en tutoriales es uno de varios; a esta cuenta le tocó un
+   > `+1 737 …`. Copia el que muestre **tu** consola. Enviar desde un
+   > número que no es el de tu Sandbox falla con `21654`, y el mensaje de
+   > error no dice que el `From` esté mal. Para comprobar cuál es el tuyo:
+   >
+   > ```bash
+   > curl -s -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN"    >   "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json?PageSize=20"    >   | jq -r '.messages[] | select(.direction=="inbound") | .to'
+   > ```
+   >
+   > El destinatario de tu propio `join` es el número del Sandbox.
 3. **Cada número que vaya a recibir mensajes** debe enviar ese código por
    WhatsApp al número del Sandbox. Es un requisito de WhatsApp, no de ActivaUC.
 4. La sesión del Sandbox caduca a las 72 horas de inactividad; hay que repetir
@@ -61,14 +72,36 @@ Configuración para el Sandbox:
 ```bash
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=<auth token>
-TWILIO_WHATSAPP_FROM=+14155238886
-
-# Sin ContentSid: los mensajes salen como texto libre, que es lo que
-# el Sandbox admite.
-TWILIO_CONTENT_SID_CONFIRMACION=
-TWILIO_CONTENT_SID_RECORDATORIO=
-TWILIO_CONTENT_SID_CANCELACION=
+TWILIO_WHATSAPP_FROM=+1XXXXXXXXXX    # el de TU Sandbox, ver arriba
 ```
+
+### 2.1 El texto libre ya no basta (verificado el 15/10/2026)
+
+La documentación de Twilio y los tutoriales describen que, dentro de la
+ventana de 24 h que abre el `join`, se puede responder con texto libre
+(`Body`). **En una cuenta Trial nueva eso ya no funciona.** Comprobado
+contra la API con el `From` correcto y la sesión abierta:
+
+```
+POST /Messages.json  To=whatsapp:+569…  From=whatsapp:+1737…  Body=…
+→ HTTP 400 · 21654 · ContentSid Required
+```
+
+Y el camino de las plantillas tampoco está disponible sin pagar:
+
+```
+GET https://content.twilio.com/v1/ContentAndApprovals
+→ HTTP 401 · 20003 · This feature is not available on a Trial account.
+```
+
+Es decir: **en Trial no se puede enviar WhatsApp por ninguna de las dos
+vías.** No es un problema de configuración de ActivaUC; el worker
+construye bien las dos llamadas. Para que salga un mensaje hay que
+**salir de Trial** (Twilio Console → *Billing* → añadir saldo), y
+entonces crear las plantillas de la sección 4.
+
+El código no cambia al hacerlo: basta definir los tres
+`TWILIO_CONTENT_SID_*` y recargar los secretos.
 
 ---
 
@@ -354,6 +387,8 @@ El worker los clasifica para decidir si reintenta
 | `21614` | No es un móvil válido | No | Corregir el número |
 | `63003` | El destino no tiene WhatsApp | No | Informar a la persona |
 | `63024` | Mensaje no permitido (fuera de ventana, sin plantilla) | No | Usar plantilla aprobada |
+| `21654` | `ContentSid Required` | No | Tres causas posibles, en este orden: el `From` no es el número de tu Sandbox; la cuenta exige plantilla y los `TWILIO_CONTENT_SID_*` están vacíos; o se enviaron `ContentVariables` sin `ContentSid` |
+| `20003` | La función no está disponible en cuenta Trial | No | Salir de Trial; afecta al Content API, o sea a las plantillas |
 | `20429` | Demasiadas solicitudes | Sí | Se reintenta con retroceso |
 | `20500`, `20503` | Error interno de Twilio | Sí | Se reintenta con retroceso |
 

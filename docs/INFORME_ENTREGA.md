@@ -388,44 +388,52 @@ local y no se suben.
 
 ## 12. Riesgos pendientes
 
-1. **Las integraciones no se han ejercido contra las APIs reales de Google y
-   Twilio.** Requiere cuentas con credenciales productivas. Lo verificado es el
-   contrato completo con `fetch` simulado: alcances, idempotencia,
-   clasificación de errores, reintentos y validación de firma. Los pasos de
-   verificación con cuentas reales están en
-   [CONFIGURACION_GOOGLE_CALENDAR.md](CONFIGURACION_GOOGLE_CALENDAR.md) § 6 y
-   [CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 7.
+1. **Google Calendar: ejercido de punta a punta contra la API real**
+   (15/10/2026). Conexión OAuth, creación del evento al reservar y borrado al
+   cancelar, medidos en ~2 s y ~3 s respectivamente contra el proyecto
+   `ledduijmglcfbvwuicgd`.
 
-2. **Las plantillas de WhatsApp requieren aprobación de Meta**, que es un
-   trámite externo de duración variable. Sin plantillas aprobadas, los envíos
-   sólo funcionan en el Sandbox.
+2. **Twilio: autenticación verificada, envío bloqueado por el plan.** Las
+   credenciales se validaron contra la API (`GET /Accounts/{sid}` → 200) y el
+   `join` del Sandbox llegó. El envío no se pudo completar porque la cuenta
+   está en Trial: el texto libre se rechaza con `21654 · ContentSid Required`
+   —comprobado con el `From` correcto y la sesión de 24 h abierta— y el Content
+   API, que es donde se crean las plantillas, responde `20003 · not available
+   on a Trial account`. Lo verificado del worker es, por tanto, todo menos la
+   respuesta exitosa de Twilio: construye bien ambas llamadas, clasifica el 400
+   como permanente sin gastar reintentos y lo registra en `whatsapp_messages`
+   con su código. Queda pendiente repetir § 7 con la cuenta de pago.
 
-3. **La verificación de Google puede tardar** si la pantalla de consentimiento
+3. **Las plantillas de WhatsApp requieren aprobación de Meta**, que es un
+   trámite externo de duración variable. La idea de que «sin plantillas los
+   envíos funcionan en el Sandbox» ya no se sostiene: ver el punto 2.
+
+4. **La verificación de Google puede tardar** si la pantalla de consentimiento
    se publica como «Externa», porque `calendar.events` es un permiso sensible.
    Con Google Workspace institucional se evita usando el tipo «Interno».
 
-4. **`pg_cron` y `pg_net` no se instalan desde las migraciones**, porque
+5. **`pg_cron` y `pg_net` no se instalan desde las migraciones**, porque
    requieren privilegios que no todos los planes de Supabase conceden y romperían
    `db push`. Son un paso manual documentado.
 
-5. **Realtime no alcanza a los visitantes anónimos**, por diseño: `anon` no
+6. **Realtime no alcanza a los visitantes anónimos**, por diseño: `anon` no
    puede leer `public.reservations`. El catálogo público se refresca cada 45
    segundos; quien inició sesión sí recibe la actualización instantánea.
 
-6. **La capacidad se puede reducir por debajo de las reservas existentes.** Es
+7. **La capacidad se puede reducir por debajo de las reservas existentes.** Es
    deliberado: esas reservas se conservan y el sistema no acepta nuevas hasta que
    haya cupos. La interfaz lo advierte al editar.
 
-7. **No hay pruebas de renderizado de componentes.** Se omitieron para no añadir
+8. **No hay pruebas de renderizado de componentes.** Se omitieron para no añadir
    `@testing-library/react` y un DOM simulado a cambio de verificar menos de lo
    que verifican las pruebas de concurrencia y RLS.
 
-8. **Las series no se editan como serie.** `admin_create_block_series` crea una
+9. **Las series no se editan como serie.** `admin_create_block_series` crea una
    temporada completa de una vez y `admin_deactivate_block_series` la retira en
    bloque, pero cambiar la capacidad de una serie ya publicada sigue siendo
    bloque por bloque: no se guarda la identidad de la serie, sólo sus bloques.
 
-9. **Un fallo del despacho inmediato es silencioso.** El disparador que invoca
+10. **Un fallo del despacho inmediato es silencioso.** El disparador que invoca
    el worker al encolar va envuelto para que un problema de la integración no
    pueda impedir una reserva, así que el fallo sale como `notice` y no como
    error. El cron recoge el trabajo hasta un minuto después, de modo que el
@@ -441,7 +449,7 @@ Lo único que falta. No hay código pendiente.
 |---|---|---|
 | 1 | Crear el proyecto de Supabase y anotar su referencia | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 3 |
 | 2 | Crear el proyecto de Google Cloud, habilitar Calendar API y el cliente OAuth | [CONFIGURACION_GOOGLE_CALENDAR.md](CONFIGURACION_GOOGLE_CALENDAR.md) § 1–4 |
-| 3 | Crear la cuenta de Twilio, el WhatsApp Sender y las 3 plantillas | [CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 1–4 |
+| 3 | Crear la cuenta de Twilio, **salir de Trial**, el WhatsApp Sender y las 3 plantillas. Verificado el 15/10/2026: una cuenta Trial no puede enviar WhatsApp por ninguna vía —el texto libre se rechaza con `21654` y el Content API con `20003`—, así que el saldo no es opcional ni siquiera para probar en el Sandbox | [CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 1–4 |
 | 4 | Crear el bucket S3, la distribución CloudFront y el certificado | [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 2–4 |
 | 5 | Generar `ENCRYPTION_KEY` y `CRON_SECRET` y cargar los secretos | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 6 |
 | 6 | Configurar las Redirect URLs de Auth y el SMTP institucional | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 4 |

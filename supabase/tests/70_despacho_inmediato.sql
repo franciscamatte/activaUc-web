@@ -123,3 +123,57 @@ begin
   raise notice 'OK · un fallo del despacho no impide reservar (lo recoge el cron)';
 end;
 $$;
+
+do $$
+declare
+  _u uuid; _fac uuid; _bloque uuid; _r jsonb; _trabajo uuid; _despachos int;
+begin
+  -- La condición del disparador debe ser la misma que la del reclamo.
+  -- Si no lo fuera, cada fallo de envío despacharía el worker en balde:
+  -- el trabajo tiene scheduled_for vencido pero next_attempt_at futuro.
+  _u := test_helpers.create_user('d3@uc.cl', 'Fran Backoff');
+  perform test_helpers.login_as(_u);
+  perform public.set_whatsapp_consent('+56933334444', true);
+
+  insert into public.facilities (name, facility_type)
+  values ('Recinto Backoff', 'Tenis') returning id into _fac;
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '8 hours', now() + interval '9 hours', 5)
+  returning id into _bloque;
+
+  _r := public.create_reservation_strict(_bloque);
+  select id into _trabajo from public.notification_jobs
+  where reservation_id = (_r ->> 'reservation_id')::uuid and kind = 'confirmacion';
+
+  -- Se cuenta cuántas veces despacha el disparador sustituyendo la
+  -- función por una que lleva la cuenta en una tabla temporal.
+  create temporary table conteo_despachos (n int) on commit drop;
+  insert into conteo_despachos values (0);
+
+  create or replace function private.dispatch_integration_workers()
+  returns void language plpgsql security definer set search_path = 'pg_temp' as $cuenta$
+  begin
+    update conteo_despachos set n = n + 1;
+  end;
+  $cuenta$;
+
+  -- Un fallo reintentable deja el trabajo en retroceso: scheduled_for
+  -- vencido, next_attempt_at futuro. No debe despachar nada.
+  perform public.fail_notification_job(_trabajo, 'fallo transitorio', '20500', true);
+
+  select n into _despachos from conteo_despachos;
+  assert _despachos = 0,
+    format('El disparador despachó %s veces un trabajo que aún está en retroceso', _despachos);
+
+  -- En cambio, cuando el retroceso vence, sí debe despachar.
+  update public.notification_jobs
+  set status = 'pendiente', next_attempt_at = now() - interval '1 second'
+  where id = _trabajo;
+
+  select n into _despachos from conteo_despachos;
+  assert _despachos = 1,
+    format('Con el retroceso vencido esperaba 1 despacho, hubo %s', _despachos);
+
+  raise notice 'OK · el despacho inmediato respeta el retroceso de los reintentos';
+end;
+$$;
