@@ -118,7 +118,10 @@ las Edge Functions rechazan al navegador.
 
 **d) Comprobar** que `.env` tenga la URL y la clave `anon` del proyecto
 real antes de compilar, porque esos valores quedan **dentro** del
-archivo compilado.
+archivo compilado. Si alguna vez ves «No hay conexión con el servidor»
+al iniciar sesión, es casi siempre esto: un `.env` con los valores de
+ejemplo (`https://TU-PROYECTO.supabase.co`), que es lo que deja
+`cp .env.example .env` si se ejecuta sobre uno que ya funcionaba.
 
 > Si cambias de URL más adelante, hay que repetir los cuatro pasos. Por
 > eso conviene fijar un nombre propio en Netlify o Vercel desde el

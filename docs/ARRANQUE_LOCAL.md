@@ -76,7 +76,10 @@ npm run dev
 git clone https://github.com/franciscamatte/activaUc-web.git
 cd activaUc-web
 npm install
-cp .env.example .env     # y completar las dos variables de abajo
+# El «[ -f .env ] ||» no es adorno: «cp .env.example .env» a secas
+# reemplaza un .env que ya funcionaba por los valores de ejemplo, y la
+# aplicación deja de conectar con un «No hay conexión con el servidor».
+[ -f .env ] || cp .env.example .env
 npm run dev
 ```
 

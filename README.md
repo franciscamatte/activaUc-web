@@ -42,7 +42,9 @@ Supabase).
 
 ```bash
 npm install
-cp .env.example .env
+# Sin pisar un .env que ya exista: «cp» a secas lo reemplaza por los
+# valores de ejemplo y la aplicación deja de conectar.
+[ -f .env ] || cp .env.example .env
 ```
 
 ### Desarrollo con el backend real (recomendado)
