@@ -75,33 +75,52 @@ TWILIO_AUTH_TOKEN=<auth token>
 TWILIO_WHATSAPP_FROM=+1XXXXXXXXXX    # el de TU Sandbox, ver arriba
 ```
 
-### 2.1 El texto libre ya no basta (verificado el 15/10/2026)
+### 2.1 En cuenta Trial, `ContentSid` es obligatorio (verificado el 16/10/2026)
 
-La documentación de Twilio y los tutoriales describen que, dentro de la
-ventana de 24 h que abre el `join`, se puede responder con texto libre
-(`Body`). **En una cuenta Trial nueva eso ya no funciona.** Comprobado
-contra la API con el `From` correcto y la sesión abierta:
+Muchos tutoriales —y una versión anterior de este documento— dicen que
+dentro de la ventana de 24 h que abre el `join` se puede responder con
+texto libre (`Body`). **En una cuenta Trial eso no funciona.** Lo que
+dice la guía de Twilio para cuentas de prueba es explícito:
+
+> `ContentSid`: (Required) Must specify one of the Twilio-provided
+> WhatsApp template messages shown on the **Try out WhatsApp** page in
+> the Console. […] You'll choose from a few pre-approved WhatsApp
+> template messages. You won't be able to write your own message.
+
+Comprobado contra la API, con el `From` correcto del Sandbox, el `To`
+idéntico al número que envió el `join` y la sesión abierta once minutos
+antes:
 
 ```
 POST /Messages.json  To=whatsapp:+569…  From=whatsapp:+1737…  Body=…
 → HTTP 400 · 21654 · ContentSid Required
 ```
 
-Y el camino de las plantillas tampoco está disponible sin pagar:
+Conviene no confundirse con un detalle: la **respuesta automática** del
+Sandbox sí sale como texto libre y queda registrada como `outbound-api`.
+La envía Twilio desde dentro, y no es una excepción que la cuenta pueda
+usar.
 
-```
-GET https://content.twilio.com/v1/ContentAndApprovals
-→ HTTP 401 · 20003 · This feature is not available on a Trial account.
-```
+#### Qué se puede probar sin pagar
 
-Es decir: **en Trial no se puede enviar WhatsApp por ninguna de las dos
-vías.** No es un problema de configuración de ActivaUC; el worker
-construye bien las dos llamadas. Para que salga un mensaje hay que
-**salir de Trial** (Twilio Console → *Billing* → añadir saldo), y
-entonces crear las plantillas de la sección 4.
+Todo el encadenamiento: cola → worker → Twilio → entrega → webhook de
+estados. Para eso basta poner en los `TWILIO_CONTENT_SID_*` uno de los
+identificadores `HX…` que lista **Messaging → Try it out → Send a
+WhatsApp message**. No se pueden leer por API —`content.twilio.com`
+responde `20003` en Trial—, hay que copiarlos de la consola.
 
-El código no cambia al hacerlo: basta definir los tres
-`TWILIO_CONTENT_SID_*` y recargar los secretos.
+La limitación es que el **texto** será el de la plantilla de Twilio, no
+el de ActivaUC, y que el número de variables tiene que coincidir:
+`buildContentVariables` envía `1`, `2` y `3` (más `4` en la cancelación
+administrativa), así que hace falta una plantilla de muestra con ese
+mismo número de variables, o Twilio responde `63028`.
+
+#### Qué requiere salir de Trial
+
+Los textos propios de las secciones 4.1 a 4.3, porque crearlos usa el
+Content API. Al hacerlo, el código no cambia: basta sustituir los tres
+`TWILIO_CONTENT_SID_*` por los de las plantillas propias y recargar los
+secretos.
 
 ---
 
