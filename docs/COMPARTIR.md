@@ -119,10 +119,54 @@ que una demostración no pueda pasar por un sistema real.
 **c) Los permisos del repositorio.** `activaUc-web` está bajo la cuenta
 de `franciscamatte`, no bajo la tuya. Netlify necesita instalar su
 aplicación de GitHub en ese repositorio, y eso suele requerir permisos
-de administración sobre él. Si no los tienes, hay tres salidas: que la
-dueña lo autorice, hacer un *fork* y conectar el tuyo —entonces los
-despliegues salen de tu copia, no del repositorio común—, o quedarse con
-el arrastre de `dist/`, que no depende de nadie.
+de administración sobre él.
+
+Tres salidas, de menos a más trabajo continuo:
+
+1. **Que la dueña lo autorice.** El repositorio es público, así que para
+   ella es aceptar la instalación de la aplicación de Netlify: un clic.
+   Es la opción que no deja deuda.
+2. **Un *fork*.** Funciona, pero mueve el origen de los despliegues a tu
+   copia. Ver § 2.2.2.
+3. **Seguir arrastrando `dist/`.** No depende de nadie y no se
+   desincroniza de nada.
+
+### 2.2.2 Si despliegas desde un *fork*
+
+El fork copia las ramas que existen en ese momento, `Avance` incluida,
+y Netlify lo conecta sin tocar el repositorio original.
+
+El costo está en que **a partir de ahí hay dos repositorios**, y el que
+Netlify observa es el tuyo. Si sigues empujando sólo al del equipo, el
+sitio publicado se queda atrás sin avisar: no falla, simplemente muestra
+una versión vieja. Es el tipo de desincronización que se descubre tarde.
+
+La forma de no tener que acordarse es un remoto que empuje a los dos a
+la vez:
+
+```bash
+git remote add ambos https://github.com/franciscamatte/activaUc-web.git
+git remote set-url --add --push ambos https://github.com/franciscamatte/activaUc-web.git
+git remote set-url --add --push ambos https://github.com/<tu-usuario>/activaUc-web.git
+```
+
+Desde entonces:
+
+```bash
+git push ambos Avance
+```
+
+va a los dos, y si uno falla el comando falla: no hay forma de que uno
+quede atrás en silencio. `origin` se deja apuntando al repositorio del
+equipo, que es donde vive la entrega.
+
+Para comprobar que quedó bien:
+
+```bash
+git remote -v
+```
+
+`ambos` debe aparecer con **dos** líneas `(push)`.
 
 > Las vistas previas por rama son útiles, pero cada una tiene su propia
 > URL, y esas URLs **no** están en las *Redirect URLs* de Supabase ni en
