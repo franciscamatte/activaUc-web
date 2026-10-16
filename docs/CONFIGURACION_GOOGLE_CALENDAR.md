@@ -299,6 +299,29 @@ interfaz traduce cada motivo (`src/pages/DatosPersonalesPage.tsx`):
 | `no_configurado` | Faltan secretos en el servidor | `bash scripts/set-secrets.sh` |
 | `google_error` | Google rechazó la solicitud | Revisar los registros de la función |
 
+### Diagnóstico rápido de las credenciales
+
+Antes de bucear en los registros, ejecuta:
+
+```bash
+bash scripts/diagnose-google.sh
+```
+
+Envía a Google un código de autorización deliberadamente inválido y
+traduce la respuesta. Lo que importa es **qué** error devuelve:
+
+| Respuesta | Significado |
+|---|---|
+| `invalid_grant` | Las credenciales son correctas. El problema está en otra parte |
+| `invalid_client` | El `client_id` o el `client_secret` no son correctos |
+| `redirect_uri_mismatch` | El URI no coincide con el registrado |
+
+También comprueba la forma de los valores. El error más frecuente, con
+diferencia, es **pegar el ID de cliente en los dos campos**: ambos
+valores miden lo mismo y el secreto no empieza por `GOCSPX-`. El script
+lo detecta explícitamente, porque desde el navegador sólo se ve un
+genérico «Google rechazó la solicitud».
+
 ### Errores del lado de Google
 
 | Error | Causa | Solución |
