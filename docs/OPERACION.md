@@ -40,9 +40,18 @@ where jobname like 'activauc%';
 ### Historial de ejecuciones
 
 ```sql
-select jobname, status, start_time, end_time, return_message
-from cron.job_run_details
-order by start_time desc limit 20;
+-- cron.job_run_details sólo guarda el jobid, no el nombre: hay que
+-- unirla con cron.job para saber qué tarea fue cada ejecución.
+select j.jobname, d.status, d.start_time, d.end_time, d.return_message
+from cron.job_run_details d
+join cron.job j on j.jobid = d.jobid
+order by d.start_time desc limit 20;
+```
+
+O, más corto:
+
+```bash
+npm run cron:status
 ```
 
 ### Pausar y reanudar

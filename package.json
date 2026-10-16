@@ -26,6 +26,8 @@
     "functions:serve": "supabase functions serve",
     "functions:deploy": "bash scripts/deploy-functions.sh",
     "secrets:set": "bash scripts/set-secrets.sh",
+    "cron:schedule": "bash scripts/schedule-cron.sh",
+    "cron:status": "bash scripts/schedule-cron.sh --estado",
     "deploy:frontend": "bash scripts/deploy-frontend.sh"
   },
   "dependencies": {
