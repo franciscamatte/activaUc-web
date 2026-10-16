@@ -1,0 +1,18 @@
+# =====================================================================
+# ActivaUC · reescritura para una aplicación de una sola página
+# ---------------------------------------------------------------------
+# El enrutado lo hace React Router en el navegador (BrowserRouter), así
+# que en el servidor NO existe ningún archivo en /catalogo, /verificar o
+# /auth/callback. Sin esta regla, entrar directo a cualquiera de ellas
+# —o recargar la página— devuelve 404, y ahí caen justo el enlace del
+# correo de confirmación y la vuelta de Google OAuth.
+#
+# El 200 es importante: con 301 o 302 el navegador cambiaría la URL y
+# React Router perdería la ruta a la que la persona iba.
+#
+# Netlify lee este archivo desde la carpeta publicada, y Vite copia todo
+# lo de public/ a dist/, así que funciona tanto arrastrando dist/ a
+# netlify.com/drop como conectando el repositorio.
+# =====================================================================
+
+/*    /index.html   200

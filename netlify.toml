@@ -1,0 +1,46 @@
+# =====================================================================
+# ActivaUC · configuración de Netlify
+# ---------------------------------------------------------------------
+# Sólo tiene efecto si conectas el REPOSITORIO a Netlify. Si arrastras
+# la carpeta dist/ a netlify.com/drop, Netlify no ve este archivo: en
+# ese caso lo que manda es public/_redirects, que Vite copia a dist/.
+# =====================================================================
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Misma regla que public/_redirects, para el despliegue desde el
+# repositorio. Ver allí el porqué del 200.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabeceras que no pueden romper nada y cierran lo evidente.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# Una Content-Security-Policy sería la siguiente capa, pero mal ajustada
+# deja el sitio en blanco, así que va comentada y SIN verificar. Si la
+# activas, comprueba el inicio de sesión y la conexión con Google antes
+# de darla por buena, y mira la consola del navegador.
+#
+#   Content-Security-Policy = "default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+
+# Los activos compilados llevan huella en el nombre, así que se pueden
+# cachear indefinidamente. index.html NO: es el que apunta a ellos.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
