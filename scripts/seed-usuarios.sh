@@ -17,6 +17,7 @@
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --todos-los-recintos
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --recinto "Cancha de fútbol San Joaquín"
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --listar
+#   bash scripts/seed-usuarios.sh --correo admin@uc.cl --quitar-admin
 # =====================================================================
 set -euo pipefail
 
@@ -24,6 +25,7 @@ CORREO=""
 RECINTO=""
 TODOS=0
 LISTAR=0
+QUITAR=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     --recinto)              RECINTO="$2"; shift 2 ;;
     --todos-los-recintos)   TODOS=1; shift ;;
     --listar)               LISTAR=1; shift ;;
+    --quitar-admin)         QUITAR=1; shift ;;
     -h|--help)
       sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
@@ -72,6 +75,47 @@ fi
 if [[ -z "$CORREO" ]]; then
   echo "Falta --correo. Usa --help para ver el uso." >&2
   exit 2
+fi
+
+# ---------------------------------------------------------------------
+# Revocación del rol de administrador
+# ---------------------------------------------------------------------
+# La operación inversa de la promoción: devuelve la cuenta a usuario
+# común y retira sus asignaciones de recintos. Las reservas que haya
+# hecho esa persona no se tocan.
+if [[ "$QUITAR" -eq 1 ]]; then
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=on -v correo="$CORREO" <<'SQL'
+begin;
+
+select set_config('activauc.correo', :'correo', true);
+
+do $$
+declare
+  _correo text := current_setting('activauc.correo');
+  _uid    uuid;
+  _n      int;
+begin
+  select id into _uid from auth.users where lower(email) = lower(_correo);
+
+  if _uid is null then
+    raise exception 'No existe un usuario con el correo %.', _correo;
+  end if;
+
+  delete from public.facility_admin_assignments where admin_id = _uid;
+  get diagnostics _n = row_count;
+
+  update public.profiles set role = 'usuario' where id = _uid;
+
+  raise notice 'Rol de administrador retirado a %. Asignaciones eliminadas: %.', _correo, _n;
+end;
+$$;
+
+commit;
+SQL
+
+  echo ""
+  echo "Listo. Verifica con: bash scripts/seed-usuarios.sh --listar"
+  exit 0
 fi
 
 if [[ "$TODOS" -eq 0 && -z "$RECINTO" ]]; then
