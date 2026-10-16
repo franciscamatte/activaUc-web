@@ -12,6 +12,7 @@ import {
   PantallaErrorConfiguracion,
 } from "./components/ui/Estados";
 import Alerta from "./components/ui/Alerta";
+import VerificarCodigoPage from "./pages/VerificarCodigoPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import CatalogoPage from "./pages/CatalogoPage";
 import DatosPersonalesPage from "./pages/DatosPersonalesPage";
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="/registro-exitoso" element={<RegistroExitosoPage />} />
             <Route path="/recuperar-contrasena" element={<RecuperarPasswordPage />} />
             <Route path="/restablecer-contrasena" element={<RestablecerPasswordPage />} />
+            <Route path="/verificar" element={<VerificarCodigoPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
             {/* Área autenticada */}

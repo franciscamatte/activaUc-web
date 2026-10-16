@@ -35,6 +35,7 @@ import type {
   Rol,
 } from "../domain/types";
 import type {
+  TipoVerificacion,
   ActivaRepository,
   DatosBloque,
   DatosRecinto,
@@ -240,6 +241,27 @@ export class SupabaseRepository implements ActivaRepository {
     }
     const { error } = await this.cliente.auth.updateUser({ password: contrasena });
     if (error) throw aAppError(error, "actualizar la contraseña");
+  }
+
+  async verificarCodigo(datos: {
+    correo: string;
+    codigo: string;
+    tipo: TipoVerificacion;
+  }): Promise<void> {
+    const codigo = datos.codigo.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      throw new AppError("conflicto", "El código son 6 dígitos.");
+    }
+
+    const { error } = await this.cliente.auth.verifyOtp({
+      email: datos.correo.trim().toLowerCase(),
+      token: codigo,
+      // 'email' confirma el alta; 'recovery' abre la sesión temporal
+      // que permite definir una contraseña nueva.
+      type: datos.tipo === "registro" ? "email" : "recovery",
+    });
+
+    if (error) throw aAppError(error, "verificar el código");
   }
 
   async reenviarConfirmacion(correo: string): Promise<void> {

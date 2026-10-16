@@ -43,6 +43,7 @@ additional_redirect_urls = [
   "http://localhost:5173",
   "http://localhost:5173/auth/callback",
   "http://localhost:5173/restablecer-contrasena",
+  "http://localhost:5173/verificar",
   "http://localhost:5173/calendar/callback",
 ]
 jwt_expiry = 3600
@@ -54,15 +55,20 @@ enable_signup = true
 enable_signup = true
 double_confirm_changes = true
 # REQ-1 / REQ-6: la cuenta se activa por correo y la contraseña se
-# restablece mediante enlace enviado al correo registrado.
+# restablece con un código de 6 dígitos enviado al correo registrado.
+# Código y no enlace: el escáner de enlaces de Microsoft 365, que usa el
+# correo institucional de la UC, abre los enlaces antes que la persona y
+# consume el token de un solo uso (ver supabase/templates/).
 enable_confirmations = true
 secure_password_change = true
 
 [auth.email.template.confirmation]
 subject = "Confirma tu cuenta en ActivaUC"
+content_path = "./supabase/templates/confirmacion.html"
 
 [auth.email.template.recovery]
 subject = "Restablece tu contraseña de ActivaUC"
+content_path = "./supabase/templates/recuperacion.html"
 
 [auth.sessions]
 # Caducidad de sesión inactiva: el frontend muestra "sesión expirada".

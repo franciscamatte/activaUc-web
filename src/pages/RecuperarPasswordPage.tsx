@@ -47,12 +47,20 @@ export default function RecuperarPasswordPage() {
     return (
       <section className="mx-auto max-w-md space-y-5">
         <h1 className="text-2xl font-bold text-slate-900">Revisa tu correo</h1>
-        <Alerta tono="exito" titulo="Enlace enviado">
+        <Alerta tono="exito" titulo="Código enviado">
           <p>
             Si existe una cuenta asociada a <strong>{correo.trim()}</strong>, enviamos un
-            enlace para crear una nueva contraseña. El enlace caduca en una hora.
+            código de 6 dígitos para crear una nueva contraseña. Caduca en una hora.
           </p>
         </Alerta>
+        <p className="text-sm text-slate-700">
+          <Link
+            to={`/verificar?tipo=recuperacion&correo=${encodeURIComponent(correo.trim())}`}
+            className="font-medium text-emerald-800 hover:underline"
+          >
+            Ingresar el código
+          </Link>
+        </p>
         <p className="text-sm text-slate-600">
           <Link to="/login" className="font-medium text-emerald-800 hover:underline">
             Volver al inicio de sesión
@@ -66,7 +74,7 @@ export default function RecuperarPasswordPage() {
     <section className="mx-auto max-w-md">
       <h1 className="text-2xl font-bold text-slate-900">Recuperar contraseña</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Te enviaremos un enlace al correo con el que creaste tu cuenta para que puedas
+        Te enviaremos un código al correo con el que creaste tu cuenta para que puedas
         definir una contraseña nueva.
       </p>
 
@@ -88,13 +96,13 @@ export default function RecuperarPasswordPage() {
         />
 
         {error ? (
-          <Alerta tono="error" titulo="No pudimos enviar el enlace">
+          <Alerta tono="error" titulo="No pudimos enviar el código">
             {error}
           </Alerta>
         ) : null}
 
         <Boton type="submit" anchoCompleto cargando={enviando}>
-          Enviar enlace
+          Enviar código
         </Boton>
 
         <p className="text-center text-sm text-slate-600">

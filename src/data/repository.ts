@@ -97,6 +97,9 @@ export interface ResultadoDesactivacionSerie {
   mensaje: string;
 }
 
+/** Para qué sirve el código que se está verificando. */
+export type TipoVerificacion = "registro" | "recuperacion";
+
 export interface ActivaRepository {
   // --- Sesión -------------------------------------------------------
   obtenerSesion(): Promise<SesionActual | null>;
@@ -111,6 +114,19 @@ export interface ActivaRepository {
   solicitarRecuperacion(correo: string): Promise<void>;
   definirNuevaContrasena(contrasena: string): Promise<void>;
   reenviarConfirmacion(correo: string): Promise<void>;
+  /**
+   * REQ-5, REQ-6 · verificación con un código de 6 dígitos.
+   *
+   * Alternativa al enlace del correo, y la única vía fiable con
+   * correos institucionales: los escáneres de enlaces de Microsoft 365
+   * abren el enlace del correo antes que la persona y consumen el
+   * token de un solo uso. Un código no se puede gastar por visitarlo.
+   */
+  verificarCodigo(datos: {
+    correo: string;
+    codigo: string;
+    tipo: TipoVerificacion;
+  }): Promise<void>;
 
   // --- Perfil -------------------------------------------------------
   obtenerPerfil(): Promise<Perfil | null>;

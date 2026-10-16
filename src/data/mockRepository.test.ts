@@ -86,6 +86,56 @@ describe("sesión", () => {
     expect(perfil?.nombre).toBe("Persona Nueva");
     expect(perfil?.rol).toBe("usuario");
   });
+
+  it("un código de 6 dígitos confirma la cuenta y abre sesión (REQ-5)", async () => {
+    // Existe porque el enlace del correo no sirve con direcciones
+    // institucionales: el escáner de Microsoft 365 lo consume antes.
+    await repo.registrarse({
+      nombre: "Código Válido",
+      correo: "codigo@uc.cl",
+      contrasena: "clave-larga-1",
+    });
+
+    await repo.verificarCodigo({
+      correo: "codigo@uc.cl",
+      codigo: "000000",
+      tipo: "registro",
+    });
+
+    const sesion = await repo.obtenerSesion();
+    expect(sesion?.correo).toBe("codigo@uc.cl");
+  });
+
+  it("rechaza un código mal formado o incorrecto sin abrir sesión", async () => {
+    await repo.registrarse({
+      nombre: "Código Malo",
+      correo: "malo@uc.cl",
+      contrasena: "clave-larga-1",
+    });
+    await repo.cerrarSesion();
+
+    await expect(
+      repo.verificarCodigo({ correo: "malo@uc.cl", codigo: "123", tipo: "registro" }),
+    ).rejects.toThrow(/6 dígitos/);
+
+    await expect(
+      repo.verificarCodigo({ correo: "malo@uc.cl", codigo: "999999", tipo: "registro" }),
+    ).rejects.toThrow(/no es válido o ya caducó/);
+
+    expect(await repo.obtenerSesion()).toBeNull();
+  });
+
+  it("no revela si el correo existe al verificar un código", async () => {
+    // El mismo mensaje para una cuenta inexistente que para un código
+    // equivocado: de lo contrario se podría enumerar correos.
+    await expect(
+      repo.verificarCodigo({
+        correo: "nadie@uc.cl",
+        codigo: "000000",
+        tipo: "recuperacion",
+      }),
+    ).rejects.toThrow(/no es válido o ya caducó/);
+  });
 });
 
 describe("perfil y consentimiento de WhatsApp", () => {

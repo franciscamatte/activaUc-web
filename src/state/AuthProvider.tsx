@@ -185,6 +185,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       await repositorio.reenviarConfirmacion(correo);
     },
 
+    verificarCodigo: async (datos) => {
+      if (!repositorio) throw aAppError(new Error("Repositorio no disponible."));
+      await repositorio.verificarCodigo(datos);
+      // verifyOtp deja sesión abierta en los dos casos, así que el
+      // perfil debe cargarse para que la aplicación se entere.
+      await cargarPerfil(repositorio);
+    },
+
     recargarPerfil: async () => {
       if (!repositorio) return;
       await cargarPerfil(repositorio);

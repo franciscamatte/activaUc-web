@@ -1,0 +1,34 @@
+<!--
+  ActivaUC · confirmación de cuenta (REQ-5)
+
+  Deliberadamente SIN enlace. El escáner de enlaces de Microsoft 365,
+  que usa el correo institucional de la UC, abre los enlaces de los
+  mensajes antes que la persona; al ser de un solo uso, el token queda
+  consumido y la cuenta inaccesible. Se comprobó el 15/10/2026: un
+  enlace enviado a las 20:14:00 se consumió a las 20:14:20 sin que
+  nadie iniciara sesión.
+
+  Un código de 6 dígitos no se puede gastar por visitarlo.
+  Se pega en: panel de Supabase → Authentication → Emails →
+  «Confirm signup».
+-->
+<h2 style="margin:0 0 16px;font-family:system-ui,sans-serif;color:#0f172a">
+  Confirma tu cuenta de ActivaUC
+</h2>
+
+<p style="margin:0 0 20px;font-family:system-ui,sans-serif;color:#334155;font-size:15px">
+  Ingresa este código en ActivaUC para activar tu cuenta:
+</p>
+
+<p style="margin:0 0 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:32px;letter-spacing:6px;font-weight:700;color:#065f46">
+  {{ .Token }}
+</p>
+
+<p style="margin:0 0 8px;font-family:system-ui,sans-serif;color:#64748b;font-size:13px">
+  El código caduca en una hora y sólo sirve una vez.
+</p>
+
+<p style="margin:0;font-family:system-ui,sans-serif;color:#64748b;font-size:13px">
+  Si no creaste esta cuenta, puedes ignorar este mensaje.
+</p>

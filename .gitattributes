@@ -30,3 +30,7 @@
 *.ico   binary
 *.woff  binary
 *.woff2 binary
+
+# Scripts de Windows: CRLF, que es lo que espera cmd.exe.
+*.cmd   text eol=crlf
+*.bat   text eol=crlf

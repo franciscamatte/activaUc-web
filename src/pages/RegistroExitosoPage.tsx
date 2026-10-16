@@ -38,7 +38,7 @@ export default function RegistroExitosoPage() {
 
       <Alerta tono="exito" titulo="Creamos tu cuenta">
         <p>
-          Enviamos un enlace de confirmación
+          Enviamos un código de 6 dígitos
           {correo ? (
             <>
               {" a "}
@@ -47,7 +47,15 @@ export default function RegistroExitosoPage() {
           ) : (
             " a tu correo"
           )}
-          . Ábrelo para activar tu cuenta y poder iniciar sesión.
+          . Ingrésalo para activar tu cuenta.
+        </p>
+        <p className="mt-3">
+          <Link
+            to={`/verificar?tipo=registro${correo ? `&correo=${encodeURIComponent(correo)}` : ""}`}
+            className="font-semibold text-emerald-900 underline"
+          >
+            Ingresar el código
+          </Link>
         </p>
       </Alerta>
 
@@ -57,6 +65,11 @@ export default function RegistroExitosoPage() {
           <li>Revisa la carpeta de correo no deseado o promociones.</li>
           <li>Puede tardar algunos minutos en llegar.</li>
           <li>Verifica que el correo esté bien escrito.</li>
+          <li>
+            Con correos institucionales (<code>@uc.cl</code>) la entrega puede
+            demorar varios minutos: el servidor de la universidad retiene los
+            mensajes antes de entregarlos.
+          </li>
         </ul>
 
         {error ? (

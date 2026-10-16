@@ -168,8 +168,11 @@ Detalle completo en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 
 | Documento | Contenido |
 |---|---|
+| [ARRANQUE_LOCAL.md](docs/ARRANQUE_LOCAL.md) | **Empieza aquí**: cómo levantar la página en tu computador |
+| [COMPARTIR.md](docs/COMPARTIR.md) | Cómo publicarla para que la usen otras personas |
 | [REQUISITOS_IMPLEMENTADOS.md](docs/REQUISITOS_IMPLEMENTADOS.md) | Matriz REQ-1 a REQ-33 con la evidencia de cada requisito |
 | [CONFIGURACION_SUPABASE.md](docs/CONFIGURACION_SUPABASE.md) | Proyecto, migraciones, Auth, Realtime y secretos |
+| [CONFIGURACION_CORREO.md](docs/CONFIGURACION_CORREO.md) | Confirmación y recuperación por código, SMTP propio, correo institucional |
 | [CONFIGURACION_GOOGLE_CALENDAR.md](docs/CONFIGURACION_GOOGLE_CALENDAR.md) | Google Cloud, OAuth, pantalla de consentimiento, verificación |
 | [CONFIGURACION_TWILIO_WHATSAPP.md](docs/CONFIGURACION_TWILIO_WHATSAPP.md) | Cuenta, sandbox, producción, plantillas y webhook |
 | [DESPLIEGUE_AWS.md](docs/DESPLIEGUE_AWS.md) | S3, CloudFront, HTTPS, dominio, caché e invalidación |

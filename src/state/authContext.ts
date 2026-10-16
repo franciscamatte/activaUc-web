@@ -8,6 +8,7 @@
 import { createContext, useContext } from "react";
 import type { ActivaRepository } from "../data";
 import type { ConexionCalendario, Perfil } from "../domain/types";
+import type { TipoVerificacion } from "../data/repository";
 
 export type FaseSesion = "cargando" | "anonimo" | "autenticado" | "error_configuracion";
 
@@ -35,6 +36,11 @@ export interface EstadoAuth {
   solicitarRecuperacion: (correo: string) => Promise<void>;
   definirNuevaContrasena: (contrasena: string) => Promise<void>;
   reenviarConfirmacion: (correo: string) => Promise<void>;
+  verificarCodigo: (datos: {
+    correo: string;
+    codigo: string;
+    tipo: TipoVerificacion;
+  }) => Promise<void>;
 
   recargarPerfil: () => Promise<void>;
   recargarCalendario: () => Promise<void>;

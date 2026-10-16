@@ -38,6 +38,7 @@ import type {
   Rol,
 } from "../domain/types";
 import type {
+  TipoVerificacion,
   ActivaRepository,
   DatosBloque,
   DatosRecinto,
@@ -232,6 +233,38 @@ export class MockRepository implements ActivaRepository {
 
   async reenviarConfirmacion(correo: string): Promise<void> {
     void correo;
+  }
+
+  /**
+   * En modo simulado el código es siempre 000000: no hay correo que
+   * leer, y pedir uno real impediría probar el flujo sin backend.
+   */
+  async verificarCodigo(datos: {
+    correo: string;
+    codigo: string;
+    tipo: TipoVerificacion;
+  }): Promise<void> {
+    const codigo = datos.codigo.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      throw new AppError("conflicto", "El código son 6 dígitos.");
+    }
+    if (codigo !== "000000") {
+      throw new AppError("conflicto", "El código no es válido o ya caducó.");
+    }
+
+    const cuenta = this.cuenta(datos.correo);
+    if (!cuenta) {
+      throw new AppError("conflicto", "El código no es válido o ya caducó.");
+    }
+
+    if (datos.tipo === "registro") cuenta.confirmado = true;
+    this.sesion = {
+      usuarioId: cuenta.id,
+      correo: cuenta.correo,
+      expiraEn: Math.floor(Date.now() / 1000) + 3600,
+    };
+    this.guardar();
+    this.notificar("iniciada", this.sesion);
   }
 
   // =================================================================

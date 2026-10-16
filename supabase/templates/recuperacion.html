@@ -1,0 +1,30 @@
+<!--
+  ActivaUC · recuperación de contraseña (REQ-6)
+
+  Sin enlace, por el mismo motivo que la confirmación: ver el
+  comentario de confirmacion.html.
+
+  Se pega en: panel de Supabase → Authentication → Emails →
+  «Reset password».
+-->
+<h2 style="margin:0 0 16px;font-family:system-ui,sans-serif;color:#0f172a">
+  Recupera tu contraseña de ActivaUC
+</h2>
+
+<p style="margin:0 0 20px;font-family:system-ui,sans-serif;color:#334155;font-size:15px">
+  Ingresa este código en ActivaUC para definir una contraseña nueva:
+</p>
+
+<p style="margin:0 0 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:32px;letter-spacing:6px;font-weight:700;color:#065f46">
+  {{ .Token }}
+</p>
+
+<p style="margin:0 0 8px;font-family:system-ui,sans-serif;color:#64748b;font-size:13px">
+  El código caduca en una hora y sólo sirve una vez.
+</p>
+
+<p style="margin:0;font-family:system-ui,sans-serif;color:#64748b;font-size:13px">
+  Si no pediste cambiar tu contraseña, puedes ignorar este mensaje: tu
+  contraseña actual sigue siendo válida.
+</p>
