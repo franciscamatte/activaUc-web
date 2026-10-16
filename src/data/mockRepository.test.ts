@@ -558,7 +558,19 @@ describe("administración", () => {
   });
 
   it("crea y desactiva bloques horarios (REQ-30)", async () => {
-    const recinto = (await repo.listarRecintosAsignados())[0];
+    // Recinto recién creado y no uno del seed: el seed publica bloques a
+    // las 9, 11, 15, 17 y 19, y «ahora + 72 h» con los minutos a cero
+    // cae encima de uno según la hora a la que se corran las pruebas.
+    const creado = await repo.crearRecinto({
+      nombre: "Recinto Bloques Sueltos",
+      tipo: "Fútbol",
+      descripcion: "",
+      horarioFuncionamiento: "",
+      activo: true,
+    });
+    expect(creado.ok).toBe(true);
+    const recinto = (await repo.listarRecintosAsignados())
+      .find((r) => r.nombre === "Recinto Bloques Sueltos")!;
     const antes = (await repo.listarBloques(recinto.id)).length;
 
     const inicio = new Date(Date.now() + 72 * 3_600_000);
@@ -590,7 +602,20 @@ describe("administración", () => {
   });
 
   it("impide dos bloques activos con el mismo inicio en un recinto", async () => {
-    const recinto = (await repo.listarRecintosAsignados())[0];
+    // Recinto propio por el mismo motivo que la prueba anterior: con uno
+    // del seed, el choque lo provocaría el seed y no el segundo
+    // crearBloque, y la prueba pasaría por la razón equivocada.
+    const creado = await repo.crearRecinto({
+      nombre: "Recinto Choque de Inicio",
+      tipo: "Fútbol",
+      descripcion: "",
+      horarioFuncionamiento: "",
+      activo: true,
+    });
+    expect(creado.ok).toBe(true);
+    const recinto = (await repo.listarRecintosAsignados())
+      .find((r) => r.nombre === "Recinto Choque de Inicio")!;
+
     const inicio = new Date(Date.now() + 96 * 3_600_000);
     inicio.setMinutes(0, 0, 0);
 
