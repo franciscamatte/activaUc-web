@@ -43,19 +43,17 @@ recuperación de contraseña e invitaciones. Ese es el tope, y es oficial.
 
 **Comprobado el 17/10/2026, y en los dos sentidos:**
 
-- Una cuenta con un correo **ajeno a la organización de Supabase**
-  (`@alumnos.colegiosma.cl`) recibió su código de confirmación sin
-  problema. Varias guías de terceros afirman que el servicio incorporado
-  sólo entrega a miembros de la organización; **en este proyecto no es
-  así**. Una versión anterior de este documento lo daba por probable, y
-  era falso.
+- Una cuenta con un correo de un dominio **ajeno a la organización de
+  Supabase** recibió su código de confirmación sin problema. Varias guías
+  de terceros afirman que el servicio incorporado sólo entrega a miembros
+  de la organización; **no es el caso**.
 - Encadenando solicitudes de restablecimiento de contraseña, la segunda
   ya fue rechazada: la aplicación mostró «Hiciste demasiadas solicitudes
   seguidas», que es la traducción del `429` de Supabase.
 
-> Es decir: tus compañeros **sí** pueden registrarse, pero **de dos en
-> dos por hora**, contando todo el proyecto junto. Con un curso de
-> treinta personas eso es media jornada de espera, y cualquiera que pida
+> Es decir: con el emisor por omisión **se puede** registrar gente, pero
+> **de dos en dos por hora**, contando todo el proyecto junto. Para un
+> grupo de treinta personas eso es media jornada de espera, y quien pida
 > recuperar su contraseña consume el cupo de otro.
 
 Lo bueno de que el tope se note así: el `429` llega traducido a una frase

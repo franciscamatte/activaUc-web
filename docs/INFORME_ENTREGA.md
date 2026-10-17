@@ -410,8 +410,8 @@ local y no se suben.
 
 1. **Google Calendar: ejercido de punta a punta contra la API real**
    (15/10/2026). Conexión OAuth, creación del evento al reservar y borrado al
-   cancelar, medidos en ~2 s y ~3 s respectivamente contra el proyecto
-   `ledduijmglcfbvwuicgd`.
+   cancelar, medidos en ~2 s y ~3 s respectivamente contra un proyecto de
+   Supabase real.
 
 2. **Twilio: ejercido de punta a punta contra la API real** (16/10/2026).
    Reserva → cola → despacho inmediato → `process-notification-jobs` → Twilio →

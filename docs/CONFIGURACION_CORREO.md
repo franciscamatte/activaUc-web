@@ -8,13 +8,14 @@ configurar nada.
 
 ## 1. Qué pasó, con datos
 
-Tres cuentas creadas el 15/10/2026 en el proyecto real:
+Medición sobre tres cuentas de prueba, dos con correo institucional
+`@uc.cl` y una con un correo común:
 
-| Correo | Enlace enviado | Enlace consumido | ¿Inició sesión? |
+| Dominio del correo | Enlace enviado | Enlace consumido | ¿Inició sesión? |
 |---|---|---|---|
-| `njllanos@uc.cl` | 20:14:00 | **20:14:20** | nunca |
-| `njllanos.b@gmail.com` | 20:15:19 | 20:15:30 | sí, al instante |
-| `njllanos.b@uc.cl` | 23:52:23 | nunca | nunca |
+| institucional (A) | 20:14:00 | **20:14:20** | nunca |
+| común | 20:15:19 | 20:15:30 | sí, al instante |
+| institucional (B) | 23:52:23 | nunca | nunca |
 
 Dos problemas distintos, los dos del lado institucional:
 
@@ -28,8 +29,8 @@ Lo que eso provoca depende de para qué era el enlace, y conviene no
 confundirlo:
 
 - **Confirmación de cuenta.** El escáner la **confirma**. La persona no
-  queda fuera —de hecho puede iniciar sesión, y en este proyecto lo hizo
-  al día siguiente— pero la confirmación pierde todo su sentido: la
+  queda fuera: puede iniciar sesión con la contraseña que definió al
+  registrarse. Pero la confirmación pierde todo su sentido: la
   cuenta queda validada **sin que nadie haya demostrado controlar ese
   buzón**. Es un problema de seguridad, no de usabilidad. Quien registre
   una dirección ajena de ese dominio obtiene una cuenta confirmada.
@@ -38,12 +39,8 @@ confundirlo:
   la persona llega a un «enlace inválido o caducado» que no puede
   resolver pidiendo otro: el siguiente correrá la misma suerte.
 
-Una versión anterior de este documento decía que la confirmación dejaba
-a la persona fuera. No es así, y la distinción importa: el caso grave de
-la confirmación es que valida sin prueba.
-
-**La entrega se retrasa.** El tercero no se consumió nunca, y el correo
-de recuperación de las 23:53 llegó «al cabo de un rato». Es el servidor
+**La entrega se retrasa.** El tercero no se consumió nunca, y un correo
+de recuperación al mismo dominio tardó varios minutos. Es el servidor
 de la universidad reteniendo mensajes (*greylisting*) de un remitente que
 no reconoce, que en este caso es el emisor compartido que Supabase usa
 por omisión.

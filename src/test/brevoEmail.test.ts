@@ -36,7 +36,7 @@ function respuesta(cuerpo: unknown, status = 201): Response {
 
 const base = {
   apiKey: "xkeysib-clave-de-prueba",
-  from: "activauc.deportes@example.cl",
+  from: "avisos@activauc.example.cl",
   fromName: "ActivaUC",
   to: "persona@uc.cl",
   toName: "Camila Rojas",

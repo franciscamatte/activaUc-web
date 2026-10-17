@@ -77,9 +77,9 @@ TWILIO_WHATSAPP_FROM=+1XXXXXXXXXX    # el de TU Sandbox, ver arriba
 
 ### 2.1 En cuenta Trial, `ContentSid` es obligatorio (verificado el 16/10/2026)
 
-Muchos tutoriales —y una versión anterior de este documento— dicen que
-dentro de la ventana de 24 h que abre el `join` se puede responder con
-texto libre (`Body`). **En una cuenta Trial eso no funciona.** Lo que
+Muchos tutoriales dicen que dentro de la ventana de 24 h que abre el
+`join` se puede responder con texto libre (`Body`). **En una cuenta
+Trial eso no funciona.** Lo que
 dice la guía de Twilio para cuentas de prueba es explícito:
 
 > `ContentSid`: (Required) Must specify one of the Twilio-provided

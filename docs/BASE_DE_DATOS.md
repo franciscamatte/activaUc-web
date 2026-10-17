@@ -1,8 +1,8 @@
 # Cómo funciona la base de datos
 
-Para alguien que llega al proyecto y quiere entender dónde vive cada
-cosa y por qué está así. Los números y nombres de aquí se sacaron del
-proyecto real, no del diseño: 13 tablas, 2 vistas, 8 enumeraciones.
+El esquema son 13 tablas, 2 vistas y 8 enumeraciones. Este documento
+explica dónde vive cada cosa y, sobre todo, las decisiones de diseño que
+no se deducen mirando el esquema.
 
 ---
 
@@ -128,9 +128,9 @@ simultáneas leerían «quedan 1 cupo» a la vez y las dos insertarían.
 *vigente* de la misma persona en el mismo bloque. Si la lógica falla, la
 base rechaza la fila.
 
-Verificado empíricamente: 100 intentos simultáneos contra un bloque de
-capacidad 20 dieron exactamente 20 reservas, 0 sobrecupos y 0
-duplicados.
+La prueba de concurrencia (`scripts/concurrency-test.mjs`) lanza 100
+intentos simultáneos contra un bloque de capacidad 20 y exige exactamente
+20 reservas, 0 sobrecupos y 0 duplicados.
 
 ---
 
