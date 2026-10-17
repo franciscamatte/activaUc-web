@@ -4,6 +4,11 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { aAppError } from "../lib/errors";
 import type { TipoVerificacion } from "../data/repository";
+import {
+  MENSAJE_CODIGO_INVALIDO,
+  codigoTieneFormato,
+  normalizarCodigo,
+} from "../domain/codigoVerificacion";
 import Alerta from "../components/ui/Alerta";
 import Boton from "../components/ui/Boton";
 import { CampoTexto } from "../components/ui/Campo";
@@ -39,9 +44,9 @@ export default function VerificarCodigoPage() {
     setError(null);
     setAviso(null);
 
-    const limpio = codigo.replace(/\D/g, "");
-    if (limpio.length !== 6) {
-      setError("El código son 6 dígitos, sin espacios ni guiones.");
+    const limpio = normalizarCodigo(codigo);
+    if (!codigoTieneFormato(limpio)) {
+      setError(MENSAJE_CODIGO_INVALIDO);
       return;
     }
 
@@ -77,7 +82,7 @@ export default function VerificarCodigoPage() {
         {tipo === "registro" ? "Confirma tu correo" : "Ingresa el código"}
       </h1>
       <p className="mt-2 text-sm text-slate-600">
-        Escribe el código de 6 dígitos que te enviamos
+        Escribe el código que te enviamos
         {correo ? (
           <>
             {" "}a <strong>{correo}</strong>
@@ -103,16 +108,16 @@ export default function VerificarCodigoPage() {
         />
 
         <CampoTexto
-          etiqueta="Código de 6 dígitos"
+          etiqueta="Código del correo"
           type="text"
           name="one-time-code"
           autoComplete="one-time-code"
           inputMode="numeric"
-          maxLength={7}
+          maxLength={14}
           required
           value={codigo}
           onChange={(e) => setCodigo(e.target.value)}
-          placeholder="123456"
+          placeholder="12345678"
           ayuda="Está en el cuerpo del correo, no hay enlace que abrir."
         />
 

@@ -38,7 +38,7 @@ export default function RegistroExitosoPage() {
 
       <Alerta tono="exito" titulo="Creamos tu cuenta">
         <p>
-          Enviamos un código de 6 dígitos
+          Enviamos un código de verificación
           {correo ? (
             <>
               {" a "}

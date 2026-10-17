@@ -50,7 +50,7 @@ export default function RecuperarPasswordPage() {
         <Alerta tono="exito" titulo="Código enviado">
           <p>
             Si existe una cuenta asociada a <strong>{correo.trim()}</strong>, enviamos un
-            código de 6 dígitos para crear una nueva contraseña. Caduca en una hora.
+            código para crear una nueva contraseña. Caduca en una hora.
           </p>
         </Alerta>
         <p className="text-sm text-slate-700">

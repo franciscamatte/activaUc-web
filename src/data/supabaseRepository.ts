@@ -18,6 +18,11 @@ import { config } from "../lib/env";
 import { invocarFuncion } from "../lib/supabase";
 import { dentroDelRangoHorario } from "../domain/reservationRules";
 import { normalizarTelefono } from "../domain/phone";
+import {
+  MENSAJE_CODIGO_INVALIDO,
+  codigoTieneFormato,
+  normalizarCodigo,
+} from "../domain/codigoVerificacion";
 import type {
   Bloque,
   ConexionCalendario,
@@ -248,9 +253,9 @@ export class SupabaseRepository implements ActivaRepository {
     codigo: string;
     tipo: TipoVerificacion;
   }): Promise<void> {
-    const codigo = datos.codigo.replace(/\D/g, "");
-    if (codigo.length !== 6) {
-      throw new AppError("conflicto", "El código son 6 dígitos.");
+    const codigo = normalizarCodigo(datos.codigo);
+    if (!codigoTieneFormato(codigo)) {
+      throw new AppError("conflicto", MENSAJE_CODIGO_INVALIDO);
     }
 
     const { error } = await this.cliente.auth.verifyOtp({

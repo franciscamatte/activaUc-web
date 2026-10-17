@@ -19,6 +19,11 @@ import {
   tendraRecordatorio,
 } from "../domain/reservationRules";
 import { esE164, normalizarTelefono } from "../domain/phone";
+import {
+  MENSAJE_CODIGO_INVALIDO,
+  codigoTieneFormato,
+  normalizarCodigo,
+} from "../domain/codigoVerificacion";
 import { config } from "../lib/env";
 import type {
   Bloque,
@@ -263,9 +268,9 @@ export class MockRepository implements ActivaRepository {
     codigo: string;
     tipo: TipoVerificacion;
   }): Promise<void> {
-    const codigo = datos.codigo.replace(/\D/g, "");
-    if (codigo.length !== 6) {
-      throw new AppError("conflicto", "El código son 6 dígitos.");
+    const codigo = normalizarCodigo(datos.codigo);
+    if (!codigoTieneFormato(codigo)) {
+      throw new AppError("conflicto", MENSAJE_CODIGO_INVALIDO);
     }
     if (codigo !== "000000") {
       throw new AppError("conflicto", "El código no es válido o ya caducó.");

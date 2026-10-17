@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import {
+  codigoTieneFormato,
+  normalizarCodigo,
+} from "../domain/codigoVerificacion";
 import { MockRepository } from "./mockRepository";
 
 /**
@@ -87,7 +91,7 @@ describe("sesión", () => {
     expect(perfil?.rol).toBe("usuario");
   });
 
-  it("un código de 6 dígitos confirma la cuenta y abre sesión (REQ-5)", async () => {
+  it("el código del correo confirma la cuenta y abre sesión (REQ-5)", async () => {
     // Existe porque el enlace del correo no sirve con direcciones
     // institucionales: el escáner de Microsoft 365 lo consume antes.
     await repo.registrarse({
@@ -114,9 +118,15 @@ describe("sesión", () => {
     });
     await repo.cerrarSesion();
 
+    // La longitud la configura Supabase entre 6 y 10, así que lo que se
+    // rechaza es estar fuera de ese rango, no «no ser 6».
     await expect(
       repo.verificarCodigo({ correo: "malo@uc.cl", codigo: "123", tipo: "registro" }),
-    ).rejects.toThrow(/6 dígitos/);
+    ).rejects.toThrow(/entre 6 y 10/);
+
+    await expect(
+      repo.verificarCodigo({ correo: "malo@uc.cl", codigo: "12345678901", tipo: "registro" }),
+    ).rejects.toThrow(/entre 6 y 10/);
 
     await expect(
       repo.verificarCodigo({ correo: "malo@uc.cl", codigo: "999999", tipo: "registro" }),
@@ -930,5 +940,25 @@ describe("series de bloques (REQ-30)", () => {
 
     const reservas = await repo.listarReservasAdmin(recintoId, "todas");
     expect(reservas.find((r) => r.id === reserva.reservaId)?.estado).toBe("vigente");
+  });
+});
+
+describe("formato del código de verificación", () => {
+  // Existe porque di por hecho que eran 6 dígitos y el proyecto estaba
+  // configurado en 8: la interfaz rechazaba códigos válidos sin
+  // consultar al servidor. La longitud la decide Supabase.
+  it("acepta cualquier longitud del rango que admite Supabase", () => {
+    for (const largo of [6, 7, 8, 9, 10]) {
+      expect(codigoTieneFormato("1".repeat(largo))).toBe(true);
+    }
+    expect(codigoTieneFormato("12345")).toBe(false);
+    expect(codigoTieneFormato("12345678901")).toBe(false);
+    expect(codigoTieneFormato("")).toBe(false);
+  });
+
+  it("tolera cómo la gente pega el código", () => {
+    expect(normalizarCodigo(" 1234 5678 ")).toBe("12345678");
+    expect(normalizarCodigo("1234-5678")).toBe("12345678");
+    expect(codigoTieneFormato("1234 5678")).toBe(true);
   });
 });
