@@ -111,6 +111,13 @@ npm run build        # compilar para producción (queda en dist/)
 npm run preview      # ver el resultado de build/ como lo verá el público
 ```
 
+> `build` —y por tanto `verify`— **exige un `.env` válido**, y falla con un
+> mensaje que nombra lo que falta. Es deliberado: Vite incrusta las
+> variables al compilar, así que sin ellas el sitio se publica y muestra
+> «La aplicación no está configurada», un fallo que se descubre cuando ya
+> está desplegado. `npm run dev` no lo exige: sin `.env` arranca en modo
+> simulado, que es lo útil para revisar la interfaz.
+
 Desde Windows, cualquiera de ellos:
 
 ```powershell
