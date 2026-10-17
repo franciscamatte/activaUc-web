@@ -116,6 +116,57 @@ Y en el DNS de ese dominio, los tres registros que hacen que un correo
 no se considere sospechoso: **SPF**, **DKIM** y **DMARC**. El proveedor
 los entrega al dar de alta el dominio.
 
+### 3.1 Con Brevo, paso a paso (verificado el 17/10/2026)
+
+Brevo publica una guía propia para Supabase, y de ahí salen estos
+valores. Dos detalles que contradicen lo que suele escribirse:
+
+| Campo de Supabase | Valor |
+|---|---|
+| Host | `smtp-relay.brevo.com` |
+| Port | `587` (STARTTLS) o `465` (SSL) |
+| Username | **el correo con que entras a Brevo**, no el login con forma de `9xxxx@smtp-brevo.com` |
+| Password | la **SMTP key** de Settings → SMTP & API → pestaña SMTP. No la contraseña de la cuenta, ni una API key |
+| Sender email | un remitente verificado en Brevo, que debe coincidir **exactamente** |
+| Minimum interval per user | 60 s por omisión |
+
+La ruta en Supabase es **Authentication → Emails → SMTP Settings**.
+
+#### Qué remitente usar si no tienes dominio
+
+Brevo recomienda autenticar un dominio propio con SPF y DKIM, y es lo
+correcto. Sin dominio, queda verificar una dirección suelta, y ahí la
+elección no es indiferente. Consultadas las políticas DMARC el
+17/10/2026:
+
+| Dominio | Política | Como remitente vía Brevo |
+|---|---|---|
+| `gmail.com` | `p=none` | **Sirve.** Falla la alineación DKIM/SPF, así que puntúa peor para spam, pero ninguna política lo rechaza |
+| `uc.cl` | `p=quarantine` | **No usar.** Un correo que diga venir de `@uc.cl` sin estar autorizado va a cuarentena |
+
+Es decir: una dirección `@gmail.com` verificada en Brevo es suficiente
+para que el curso pueda registrarse, aunque no sea lo ideal. Un dominio
+propio —cuestan unos pocos dólares al año— con SPF, DKIM y DMARC es lo
+que de verdad arregla la entrega, y es además lo único que mejora la
+llegada a destinatarios institucionales.
+
+> La política DMARC de `uc.cl` habla de los correos que **dicen venir**
+> de `uc.cl`, no de cómo trata los que recibe. Para el problema de
+> entrada —la retención que diagnosticamos en § 1— lo que ayuda es un
+> remitente con reputación propia, no esta tabla.
+
+#### El orden importa, y no es el que parecía
+
+Según la propia guía de Brevo, **sin SMTP propio la pestaña Templates de
+Supabase no permite editar el asunto ni el cuerpo** de los correos de
+autenticación. Si eso se cumple, pegar las plantillas de
+`supabase/templates/` era imposible antes de configurar el SMTP, y el
+orden correcto es:
+
+1. SMTP propio
+2. Las plantillas (§ 2.1)
+3. Subir el cupo en Authentication → Rate Limits
+
 Tres caminos, en orden de preferencia para este proyecto:
 
 1. **SMTP institucional de la UC.** Es el ideal: un correo
