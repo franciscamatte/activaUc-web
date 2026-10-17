@@ -16,6 +16,7 @@
 
 import { sendWhatsApp, TwilioApiError } from "../_shared/twilio.ts";
 import { sendEmail, TwilioEmailError } from "../_shared/twilioEmail.ts";
+import { sendBrevoEmail, BrevoEmailError } from "../_shared/brevoEmail.ts";
 import { isE164, normalizePhone } from "../_shared/phone.ts";
 import {
   buildBody,
@@ -159,29 +160,45 @@ Deno.serve(async (request) => {
       let estadoProveedor: string;
 
       if (esCorreo) {
-        const result = await sendEmail({
-          accountSid,
-          authToken,
-          from: optionalEnv("TWILIO_EMAIL_FROM") || null,
-          fromName: optionalEnv("TWILIO_EMAIL_FROM_NAME") || null,
-          to: correo,
-          // En cuenta Trial, Twilio exige que el contenido coincida
-          // exactamente con una de sus plantillas de muestra
-          // («Invalid template: email content does not match any
-          // approved template»). Estas dos variables permiten fijar ese
-          // contenido para ejercer la cadena completa sin pagar; vacías,
-          // se envían el asunto y el cuerpo propios de ActivaUC.
-          subject: optionalEnv("TWILIO_EMAIL_ASUNTO_FIJO") ||
-            buildSubject(job.kind, ctx),
-          html: optionalEnv("TWILIO_EMAIL_HTML_FIJO") ||
-            buildEmailHtml(job.kind, ctx, optionalEnv("APP_URL") || null),
-        });
-        providerSid = result.operationId;
-        destino = correo;
-        // La API de correo es asíncrona: Twilio acepta la operación y
-        // la envía después, y no hay webhook de estados. «aceptado» es
-        // todo lo que se puede afirmar.
-        estadoProveedor = "aceptado";
+        const asunto = buildSubject(job.kind, ctx);
+        const html = buildEmailHtml(job.kind, ctx, optionalEnv("APP_URL") || null);
+        const brevoKey = optionalEnv("BREVO_API_KEY");
+
+        if (brevoKey) {
+          // Camino preferido: contenido propio y sin exigir que el
+          // destinatario esté verificado, que son las dos cosas que el
+          // plan de prueba de Twilio no permite.
+          const result = await sendBrevoEmail({
+            apiKey: brevoKey,
+            from: optionalEnv("BREVO_EMAIL_FROM"),
+            fromName: optionalEnv("BREVO_EMAIL_FROM_NAME") || null,
+            to: correo,
+            toName: job.full_name,
+            subject: asunto,
+            html,
+          });
+          providerSid = result.messageId;
+          destino = correo;
+          estadoProveedor = "aceptado";
+        } else {
+          // Respaldo: la API de correo de Twilio. En cuenta Trial exige
+          // que el contenido coincida con una de sus plantillas de
+          // muestra, de ahí las dos variables que lo fijan.
+          const result = await sendEmail({
+            accountSid,
+            authToken,
+            from: optionalEnv("TWILIO_EMAIL_FROM") || null,
+            fromName: optionalEnv("TWILIO_EMAIL_FROM_NAME") || null,
+            to: correo,
+            subject: optionalEnv("TWILIO_EMAIL_ASUNTO_FIJO") || asunto,
+            html: optionalEnv("TWILIO_EMAIL_HTML_FIJO") || html,
+          });
+          providerSid = result.operationId;
+          destino = correo;
+          // Las dos APIs de correo son asíncronas y sin webhook de
+          // estados: se sabe que el proveedor aceptó, no que entregó.
+          estadoProveedor = "aceptado";
+        }
       } else {
         const result = await sendWhatsApp({
           accountSid,
@@ -209,16 +226,20 @@ Deno.serve(async (request) => {
         job_id: job.job_id,
         tipo: job.kind,
         destino: esCorreo ? maskEmail(correo) : maskPhone(phone),
-        plantilla: esCorreo ? "correo" : contentSid ? "aprobada" : "texto_libre",
+        plantilla: esCorreo
+          ? optionalEnv("BREVO_API_KEY") ? "correo_brevo" : "correo_twilio"
+          : contentSid ? "aprobada" : "texto_libre",
         variables: contentVariables ? Object.keys(contentVariables).length : 0,
         canal: job.channel,
         estado_twilio: estadoProveedor,
       });
     } catch (cause) {
-      const esErrorDeTwilio =
-        cause instanceof TwilioApiError || cause instanceof TwilioEmailError;
-      const retryable = esErrorDeTwilio ? cause.retryable : true;
-      const errorCode = esErrorDeTwilio ? cause.code : null;
+      const esErrorDeProveedor =
+        cause instanceof TwilioApiError ||
+        cause instanceof TwilioEmailError ||
+        cause instanceof BrevoEmailError;
+      const retryable = esErrorDeProveedor ? cause.retryable : true;
+      const errorCode = esErrorDeProveedor ? cause.code : null;
 
       await admin.rpc("fail_notification_job", {
         _job_id: job.job_id,

@@ -261,6 +261,53 @@ Con eso verificado el 16/10/2026: reserva → cola → despacho inmediato →
 worker → Twilio, correo aceptado en **3 s** con su `operationId`, y
 WhatsApp en paralelo en 2 s.
 
+### 6.1.1 Por eso el canal pasó a Brevo (17/10/2026)
+
+Al reservar con una cuenta nueva el aviso no llegó, y el webhook
+registró:
+
+```
+574002 · The recipient email address is not verified for this trial
+```
+
+Es decir, además de limitar el contenido a plantillas de muestra, el
+plan de prueba de Twilio **sólo entrega a destinatarios verificados en
+la cuenta**. Con las dos restricciones juntas, ese canal no sirve para
+terceros: habría que verificar a mano a cada compañero.
+
+Brevo no tiene ninguna de las dos en su plan gratuito —contenido propio
+y 300 correos al día a quien sea—, y ya estaba configurado para los
+correos de autenticación, así que no añade una cuenta más que mantener.
+
+**Cómo se activa.** Definiendo `BREVO_API_KEY`: si está, las
+notificaciones salen por Brevo; si no, siguen por Twilio. No hay que
+tocar código.
+
+```bash
+BREVO_API_KEY=xkeysib-…          # la API key, NO la SMTP key
+BREVO_EMAIL_FROM=…               # un remitente verificado en Brevo
+BREVO_EMAIL_FROM_NAME=ActivaUC
+```
+
+> Las dos claves de Brevo se confunden con facilidad y están en
+> pantallas distintas del mismo menú. La **SMTP key** es la que usa
+> Supabase para sus correos de autenticación; la **API key**, que
+> empieza con `xkeysib-`, es la que usa este canal. Se emplea la API
+> HTTP y no SMTP porque las Edge Functions no pueden abrir conexiones
+> salientes en los puertos de SMTP, cosa que Brevo advierte en su
+> documentación.
+
+Dos decisiones del emisor que conviene conocer:
+
+- **Un error de configuración no gasta reintentos.** Si falta la clave o
+  el remitente, falla de inmediato y sin llamar a Brevo.
+- **Si Brevo acepta el envío pero no devuelve `messageId`, no se
+  reintenta.** El correo probablemente salió y lo que falta es la
+  trazabilidad; un reintento mandaría un segundo aviso a la misma
+  persona, y recibirlo dos veces es peor que perder un identificador.
+
+Cubierto en `src/test/brevoEmail.test.ts` (10 casos).
+
 ### 6.2 Lo que requiere salir de Trial
 
 Vaciar las dos variables y ya: entonces se envían el asunto y el cuerpo
