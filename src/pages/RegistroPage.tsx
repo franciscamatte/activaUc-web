@@ -52,7 +52,12 @@ export default function RegistroPage() {
       const { requiereConfirmacion } = await registrarse({ nombre, correo, contrasena });
 
       if (requiereConfirmacion) {
-        navegar("/registro-exitoso", { replace: true, state: { correo: correo.trim() } });
+        // Directo al campo del código: una pantalla intermedia con un
+        // botón «ingresar el código» era un clic sin información nueva.
+        navegar(
+          `/verificar?tipo=registro&correo=${encodeURIComponent(correo.trim())}`,
+          { replace: true },
+        );
       } else {
         navegar("/catalogo", { replace: true });
       }

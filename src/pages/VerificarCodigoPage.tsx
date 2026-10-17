@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { aAppError } from "../lib/errors";
 import type { TipoVerificacion } from "../data/repository";
@@ -29,6 +29,14 @@ export default function VerificarCodigoPage() {
   const { verificarCodigo, reenviarConfirmacion } = useAuth();
   const navegar = useNavigate();
   const [parametros] = useSearchParams();
+  const ubicacion = useLocation();
+
+  // De dónde viene la persona, para decirle algo útil en lugar de
+  // dejarla frente a un campo sin contexto.
+  const estado = (ubicacion.state ?? {}) as {
+    desdeLogin?: boolean;
+    recienEnviado?: boolean;
+  };
 
   const tipo: TipoVerificacion =
     parametros.get("tipo") === "recuperacion" ? "recuperacion" : "registro";
@@ -77,7 +85,7 @@ export default function VerificarCodigoPage() {
   }
 
   return (
-    <section className="mx-auto max-w-md">
+    <section className="mx-auto max-w-md space-y-5">
       <h1 className="text-2xl font-bold text-slate-900">
         {tipo === "registro" ? "Confirma tu correo" : "Ingresa el código"}
       </h1>
@@ -90,6 +98,20 @@ export default function VerificarCodigoPage() {
         ) : null}
         . Caduca en una hora.
       </p>
+
+      {estado.desdeLogin ? (
+        <Alerta tono="aviso" titulo="Tu cuenta aún no está confirmada">
+          Busca el código que te enviamos al crearla y escríbelo aquí. Si no lo
+          encuentras, pide uno nuevo más abajo.
+        </Alerta>
+      ) : null}
+
+      {estado.recienEnviado ? (
+        <Alerta tono="info">
+          Si existe una cuenta con ese correo, acabamos de enviarle un código.
+          Caduca en una hora.
+        </Alerta>
+      ) : null}
 
       <form
         onSubmit={alEnviar}
@@ -152,6 +174,20 @@ export default function VerificarCodigoPage() {
           </Link>
         </p>
       </form>
+
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-700">
+        <h2 className="font-semibold text-slate-900">¿No llegó el correo?</h2>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5">
+          <li>Revisa la carpeta de correo no deseado o promociones.</li>
+          <li>Puede tardar algunos minutos en llegar.</li>
+          <li>Verifica que el correo esté bien escrito.</li>
+          <li>
+            Con correos institucionales (<code>@uc.cl</code>) la entrega puede
+            demorar varios minutos: el servidor de la universidad retiene los
+            mensajes antes de entregarlos.
+          </li>
+        </ul>
+      </div>
     </section>
   );
 }

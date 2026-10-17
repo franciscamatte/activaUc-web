@@ -21,7 +21,6 @@ import LoginPage from "./pages/LoginPage";
 import MisReservasPage from "./pages/MisReservasPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RecuperarPasswordPage from "./pages/RecuperarPasswordPage";
-import RegistroExitosoPage from "./pages/RegistroExitosoPage";
 import RegistroPage from "./pages/RegistroPage";
 import RestablecerPasswordPage from "./pages/RestablecerPasswordPage";
 
@@ -85,7 +84,13 @@ export default function App() {
             {/* Autenticación */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/registro" element={<RegistroPage />} />
-            <Route path="/registro-exitoso" element={<RegistroExitosoPage />} />
+            {/* La pantalla intermedia desapareció: el registro lleva
+                directo al campo del código. La ruta se conserva para
+                los enlaces que ya existieran. */}
+            <Route
+              path="/registro-exitoso"
+              element={<Navigate to="/verificar?tipo=registro" replace />}
+            />
             <Route path="/recuperar-contrasena" element={<RecuperarPasswordPage />} />
             <Route path="/restablecer-contrasena" element={<RestablecerPasswordPage />} />
             <Route path="/verificar" element={<VerificarCodigoPage />} />

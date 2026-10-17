@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { aAppError } from "../lib/errors";
 import Alerta from "../components/ui/Alerta";
@@ -15,11 +15,11 @@ import { CampoTexto } from "../components/ui/Campo";
  */
 export default function RecuperarPasswordPage() {
   const { solicitarRecuperacion } = useAuth();
+  const navegar = useNavigate();
 
   const [correo, setCorreo] = useState("");
   const [errorCampo, setErrorCampo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   async function alEnviar(evento: FormEvent) {
@@ -35,39 +35,18 @@ export default function RecuperarPasswordPage() {
     setEnviando(true);
     try {
       await solicitarRecuperacion(correo);
-      setEnviado(true);
+      // Directo al campo del código, por el mismo motivo que en el
+      // registro. El aviso de «si existe una cuenta…» viaja con la
+      // navegación, para no revelar si el correo estaba registrado.
+      navegar(
+        `/verificar?tipo=recuperacion&correo=${encodeURIComponent(correo.trim())}`,
+        { replace: true, state: { recienEnviado: true } },
+      );
     } catch (e) {
       setError(aAppError(e, "solicitar la recuperación").message);
     } finally {
       setEnviando(false);
     }
-  }
-
-  if (enviado) {
-    return (
-      <section className="mx-auto max-w-md space-y-5">
-        <h1 className="text-2xl font-bold text-slate-900">Revisa tu correo</h1>
-        <Alerta tono="exito" titulo="Código enviado">
-          <p>
-            Si existe una cuenta asociada a <strong>{correo.trim()}</strong>, enviamos un
-            código para crear una nueva contraseña. Caduca en una hora.
-          </p>
-        </Alerta>
-        <p className="text-sm text-slate-700">
-          <Link
-            to={`/verificar?tipo=recuperacion&correo=${encodeURIComponent(correo.trim())}`}
-            className="font-medium text-emerald-800 hover:underline"
-          >
-            Ingresar el código
-          </Link>
-        </p>
-        <p className="text-sm text-slate-600">
-          <Link to="/login" className="font-medium text-emerald-800 hover:underline">
-            Volver al inicio de sesión
-          </Link>
-        </p>
-      </section>
-    );
   }
 
   return (

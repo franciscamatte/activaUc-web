@@ -11,7 +11,7 @@ import { CampoTexto } from "../components/ui/Campo";
 
 /** REQ-2, REQ-3, REQ-5 · inicio de sesión con manejo explícito de errores. */
 export default function LoginPage() {
-  const { iniciarSesion, reenviarConfirmacion, sesionExpirada, descartarAvisoExpiracion } = useAuth();
+  const { iniciarSesion, sesionExpirada, descartarAvisoExpiracion } = useAuth();
   const navegar = useNavigate();
   const ubicacion = useLocation();
 
@@ -26,14 +26,11 @@ export default function LoginPage() {
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [tipoError, setTipoError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [reenviado, setReenviado] = useState(false);
 
   async function alEnviar(evento: FormEvent) {
     evento.preventDefault();
     setError(null);
-    setTipoError(null);
     setEnviando(true);
     descartarAvisoExpiracion();
 
@@ -42,19 +39,21 @@ export default function LoginPage() {
       navegar(estado.destino ?? "/catalogo", { replace: true });
     } catch (e) {
       const appError = aAppError(e, "iniciar sesión");
+
+      // Si la cuenta existe pero no está confirmada, lo que la persona
+      // necesita es el campo del código, no un botón para recibir otro:
+      // lo más probable es que ya tenga uno en su bandeja.
+      if (appError.tipo === "correo_no_confirmado") {
+        navegar(
+          `/verificar?tipo=registro&correo=${encodeURIComponent(correo.trim())}`,
+          { replace: true, state: { desdeLogin: true } },
+        );
+        return;
+      }
+
       setError(appError.message);
-      setTipoError(appError.tipo);
     } finally {
       setEnviando(false);
-    }
-  }
-
-  async function alReenviar() {
-    try {
-      await reenviarConfirmacion(correo);
-      setReenviado(true);
-    } catch (e) {
-      setError(aAppError(e).message);
     }
   }
 
@@ -137,21 +136,6 @@ export default function LoginPage() {
           {error ? (
             <Alerta tono="error" titulo="No pudimos iniciar tu sesión">
               <p>{error}</p>
-              {tipoError === "correo_no_confirmado" && !reenviado ? (
-                <Boton
-                  variante="secundario"
-                  tamano="pequeno"
-                  className="mt-3"
-                  onClick={() => void alReenviar()}
-                >
-                  Reenviar correo de confirmación
-                </Boton>
-              ) : null}
-              {reenviado ? (
-                <p className="mt-2 font-medium">
-                  Reenviamos el correo de confirmación. Revisa tu bandeja de entrada.
-                </p>
-              ) : null}
             </Alerta>
           ) : null}
 
