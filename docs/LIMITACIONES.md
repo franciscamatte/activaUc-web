@@ -159,6 +159,30 @@ tocar— así que viene de la documentación de precios de Supabase.
 
 ---
 
+### 2.5 Dos cosas caducan solas si el proyecto queda quieto
+
+Se juntan, y ninguna avisa:
+
+| Qué | Plazo | Efecto |
+|---|---|---|
+| Proyecto de Supabase (plan gratuito) | 1 semana sin actividad | se pausa: la página responde pero no funciona |
+| API key de Brevo | 90 días sin uso | deja de enviar; los avisos fallan en silencio |
+
+La de Brevo además tiene vencimiento propio —un año si se deja el valor
+por omisión— así que conviene anotar la fecha donde se vaya a mirar.
+
+Para una entrega evaluada, lo barato es usar la página de vez en cuando
+durante el periodo de revisión. Para algo que deba funcionar sin
+vigilancia, hay que asumir plan de pago en Supabase y renovar la clave.
+
+El permiso de esa clave, por cierto, es **sólo «Emails transaccionales ·
+Todos»**. Es el único recurso que el código usa, así que si se filtrara
+lo peor posible es que alguien envíe correos desde el remitente
+verificado: no puede leer contactos, ni ver la cuenta, ni gastar saldo
+de SMS o WhatsApp.
+
+---
+
 ## 3. Topes de plataforma que no te van a afectar
 
 Supabase y Netlify tienen cupos en sus planes gratuitos —tamaño de base
