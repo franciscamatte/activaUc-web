@@ -124,7 +124,7 @@ src/
   test/          Pruebas de integración de Google Calendar y Twilio
 
 supabase/
-  migrations/    Esquema, funciones, RLS y Realtime (4 migraciones ordenadas)
+  migrations/    Esquema, funciones, RLS, Realtime, series, despacho y canal de correo (8 migraciones ordenadas)
   functions/     7 Edge Functions + módulos compartidos en _shared/
   tests/         Pruebas SQL de esquema, reservas, cancelaciones, RLS e integraciones
   cron/          Programación de tareas con pg_cron (se ejecuta una vez por entorno)

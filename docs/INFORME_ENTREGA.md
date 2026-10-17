@@ -125,15 +125,29 @@ src/test/{oauthCrypto,googleCalendar,twilioWhatsapp}.test.ts
 vitest.config.ts
 ```
 
-**Scripts y configuración (8)**
+**Scripts y configuración (22)**
 
 ```
 scripts/{db-harness,db-test,concurrency-test}.mjs
 scripts/{set-secrets,deploy-functions,deploy-frontend,seed-usuarios}.sh
+scripts/{db-connect-test,schedule-cron,supabase-cli,dev-wsl}.sh
+scripts/{diagnose-google,diagnose-twilio,configurar-publicacion}.sh
+scripts/lib/{node-env,db-url}.sh
+iniciar.cmd
+netlify.toml
+public/_redirects
 .gitattributes
 .env.secrets.example
 package-lock.json
 ```
+
+Los de diagnóstico existen porque dos fallos de integración costaron horas de
+conjeturas: `diagnose-google.sh` distingue `invalid_grant` de `invalid_client`
+—es decir, credenciales buenas de credenciales mal copiadas— y
+`diagnose-twilio.sh` comprueba el plan de la cuenta y, sobre todo, cuál es el
+número del Sandbox que le toca, que no es el mismo en todas y cuyo error no lo
+menciona. `configurar-publicacion.sh` hace los ajustes de backend al publicar
+el frontend e imprime los que viven en paneles ajenos.
 
 **Documentación (11)**
 
@@ -156,11 +170,11 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por 4 migraciones coherentes. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 8 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
-| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 11 documentos de `docs/` |
+| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 15 documentos de `docs/` |
 | `yarn.lock` | Se unificó en npm (`package-lock.json`) para que CI sea reproducible |
 
 ---
@@ -173,6 +187,10 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261016000200_functions.sql` | 1352 | 2 vistas y 19 funciones: transacciones de reserva y cancelación, colas, límite de uso, administración, webhooks |
 | `20261016000300_rls_policies.sql` | 287 | `REVOKE ALL` y concesiones por columna, 20 políticas RLS, barrera anti-escalada de privilegios |
 | `20261016000400_realtime_and_cron.sql` | 158 | Publicación de Realtime, configuración operativa, disparador de tareas, vista de salud, limpieza |
+| `20261016000500_block_series.sql` | 348 | Publicación y retirada de series de bloques (REQ-30): rango de fechas, varias horas de inicio, dias de la semana, hora local de Santiago, vista previa e idempotencia |
+| `20261016000600_despacho_inmediato.sql` | 117 | Cuatro disparadores por sentencia que invocan el worker en cuanto se encola un trabajo listo, para no esperar al ciclo de `pg_cron` |
+| `20261016000700_despacho_respeta_backoff.sql` | 62 | Iguala la condición del disparador a la del reclamo, para no despachar un trabajo que aún está en su retroceso |
+| `20261016000800_canal_correo.sql` | 844 | Segundo canal de notificación: consentimiento de correo independiente, `channel` abierto a `email`, encolado por canal y reclamo que resuelve el destino de cada uno |
 
 Las 13 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
@@ -193,7 +211,7 @@ distintos por entorno y no deben versionarse.
 | `google-oauth-callback` | no | Verifica la firma, consume el `state` de forma atómica, cifra los tokens y los persiste |
 | `google-calendar-disconnect` | sí | Revoca en Google, borra los tokens y cancela los trabajos pendientes |
 | `process-calendar-jobs` | no | Crea y elimina eventos con reintentos. Renueva el access token solo |
-| `process-notification-jobs` | no | Envía por Twilio validando consentimiento y E.164 |
+| `process-notification-jobs` | no | Envía por WhatsApp o por correo, segun el canal del trabajo, validando el consentimiento de ese canal y el formato del destino |
 | `twilio-status-webhook` | no | Actualiza los estados de entrega. Valida firma; idempotente |
 | `cron-dispatch` | no | Punto único de entrada a los workers: lo invoca un disparador en cuanto se encola un trabajo, y `pg_cron` cada minuto como red de seguridad |
 
@@ -202,8 +220,9 @@ Twilio o `x-cron-secret`, siempre con comparación en tiempo constante. Si
 `CRON_SECRET` no está configurado, los workers rechazan todo.
 
 Módulos compartidos en `_shared/`: cifrado AES-256-GCM y firma HMAC, clientes de
-Google y Twilio, validación E.164, plantillas en español, CORS por lista blanca
-y registro con redacción obligatoria.
+Google, de la API de Mensajes de Twilio y de su API de Correo, validación E.164,
+plantillas en español con el orden de variables configurable, CORS por lista
+blanca y registro con redacción obligatoria.
 
 ---
 
@@ -445,22 +464,44 @@ local y no se suben.
    error. El cron recoge el trabajo hasta un minuto después, de modo que el
    efecto visible es la latencia de antes, no una pérdida.
 
+11. **El correo institucional retiene y abre los enlaces.** Comprobado contra el
+   proyecto real el 15/10/2026: un enlace de confirmación enviado a una
+   dirección `@uc.cl` a las 20:14:00 quedó consumido a las 20:14:20 sin que
+   nadie iniciara sesión —lo abrió el escáner de enlaces de Microsoft 365— y al
+   ser de un solo uso la cuenta quedó inaccesible. Otra dirección del mismo
+   dominio no recibió el correo hasta bastante después, lo que apunta además a
+   retención del servidor de la universidad.
+
+   Resuelto en lo que depende de la plataforma: los correos llevan un código de
+   6 dígitos y ningún enlace, y un código no se gasta por visitarlo. Quedan dos
+   pasos externos: pegar las plantillas de `supabase/templates/` en el panel
+   (§ 13, paso 7) y configurar SMTP propio para que la entrega no se retrase
+   (§ 13, paso 8). Detalle en
+   [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 1.
+
 ---
 
 ## 13. Configuración externa pendiente
 
 Lo único que falta. No hay código pendiente.
 
+Dos de estos pasos son los que con más frecuencia se dan por hechos y no lo
+están: el **7**, porque sin él los correos siguen llevando el enlace que el
+riesgo 11 de § 12 describe, y el **8**, porque el límite del servicio
+incorporado de Supabase deja a casi todo el mundo sin poder registrarse.
+
 | Paso | Qué hay que hacer | Documento |
 |---|---|---|
 | 1 | Crear el proyecto de Supabase y anotar su referencia | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 3 |
 | 2 | Crear el proyecto de Google Cloud, habilitar Calendar API y el cliente OAuth | [CONFIGURACION_GOOGLE_CALENDAR.md](CONFIGURACION_GOOGLE_CALENDAR.md) § 1–4 |
 | 3 | Crear la cuenta de Twilio y el Sandbox. Para probar el encadenamiento basta un `ContentSid` de los que Twilio provee en la consola; para los textos propios de ActivaUC hay que **salir de Trial** y crear las 3 plantillas, porque en Trial el texto libre se rechaza con `21654` y el Content API con `20003` | [CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 1–4 |
-| 4 | Crear el bucket S3, la distribución CloudFront y el certificado | [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 2–4 |
+| 4 | Publicar el frontend. Para una entrega basta un alojamiento estático (Netlify, Vercel, Cloudflare Pages), y `netlify.toml` y `public/_redirects` ya traen la reescritura que un enrutado de una sola página necesita; para infraestructura propia, S3 y CloudFront | [COMPARTIR.md](COMPARTIR.md) § 2 o [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 2–4 |
 | 5 | Generar `ENCRYPTION_KEY` y `CRON_SECRET` y cargar los secretos | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 6 |
-| 6 | Configurar las Redirect URLs de Auth y el SMTP institucional | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 4 |
-| 7 | Apuntar el dominio a CloudFront | [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 5 |
-| 8 | Dar de alta los recintos, bloques y administradores reales | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
+| 6 | Configurar las Redirect URLs de Auth (`/auth/callback`, `/restablecer-contrasena`, `/verificar`) | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 4 |
+| 7 | **Pegar las dos plantillas de correo** de `supabase/templates/` en Authentication → Emails → Templates. Es lo que quita el enlace de un solo uso que los escáneres institucionales consumen, y no se puede hacer con `db push`: hay que hacerlo una vez por entorno | [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 2.1 |
+| 8 | Configurar SMTP propio. No es opcional si va a usarlo más de un puñado de personas: el servicio incorporado de Supabase ronda los 2 correos por hora | [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 3 |
+| 9 | Apuntar el dominio al alojamiento elegido | [COMPARTIR.md](COMPARTIR.md) § 2.3 o [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 5 |
+| 10 | Dar de alta los recintos, bloques y administradores reales. Para una temporada completa, la publicación en serie del panel | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
 
 ---
 
