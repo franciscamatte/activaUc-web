@@ -88,6 +88,29 @@ crear las tres plantillas de
 que Meta tiene que aprobar. Mientras no, WhatsApp sólo sirve para probar,
 y sólo con quien haya hecho el `join` en las últimas 24 h.
 
+### 2.2.1 El correo de notificaciones de Twilio sólo llega a destinatarios verificados
+
+Descubierto el 17/10/2026 al reservar con una cuenta nueva: el aviso no
+llegó, y el webhook registró
+
+```
+574002 · The recipient email address is not verified for this trial
+```
+
+En el plan de prueba, la API de correo de Twilio **sólo entrega a
+direcciones que estén verificadas en la cuenta**. Es el mismo patrón que
+el `join` del Sandbox de WhatsApp: sirve para probar con uno mismo y no
+sirve para terceros.
+
+Sumado a que el contenido está limitado a plantillas de muestra (§ 2.2),
+el canal de correo vía Twilio **no es utilizable con el curso**. La
+alternativa es Brevo, que ya está configurado para los correos de
+autenticación: su API transaccional admite contenido propio y no exige
+verificar a cada destinatario. Ver
+[ALTERNATIVAS_PROVEEDORES.md](ALTERNATIVAS_PROVEEDORES.md) § 3.
+
+---
+
 ### 2.3 Google Calendar · 100 personas y caducidad a los 7 días
 
 Depende de en qué estado esté la pantalla de consentimiento (Google Auth

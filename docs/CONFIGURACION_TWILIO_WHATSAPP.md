@@ -442,6 +442,7 @@ El worker los clasifica para decidir si reintenta
 | `63016` | Mensaje iniciado por la empresa **fuera de la ventana de 24 h** | No | Que la persona vuelva a escribir al Sandbox, o usar plantilla aprobada. Visto el 17/10/2026: el mismo envío se entregó 6 h después del `join` y falló a las 35 h |
 | `21654` | `ContentSid Required` | No | Tres causas posibles, en este orden: el `From` no es el número de tu Sandbox; la cuenta exige plantilla y los `TWILIO_CONTENT_SID_*` están vacíos; o se enviaron `ContentVariables` sin `ContentSid` |
 | `20003` | La función no está disponible en cuenta Trial | No | Salir de Trial; afecta al Content API, o sea a las plantillas |
+| `574002` | El destinatario no está verificado en la cuenta de prueba | No | Verificarlo en la consola, o salir de Trial. Afecta al canal de correo: en Trial sólo entrega a direcciones verificadas, así que no sirve para terceros |
 | `20429` | Demasiadas solicitudes | Sí | Se reintenta con retroceso |
 | `20500`, `20503` | Error interno de Twilio | Sí | Se reintenta con retroceso |
 
