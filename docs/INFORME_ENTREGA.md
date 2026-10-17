@@ -174,7 +174,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
-| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 16 documentos de `docs/` |
+| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 17 documentos de `docs/` |
 | `yarn.lock` | Se unificó en npm (`package-lock.json`) para que CI sea reproducible |
 
 ---
@@ -183,7 +183,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Líneas | Contenido |
 |---|---|---|
-| `20261016000100_core_schema.sql` | 532 | 9 enumeraciones, 13 tablas, índices, restricciones `CHECK`, disparadores de `updated_at`, alta automática de perfil, esquema `private` |
+| `20261016000100_core_schema.sql` | 532 | 8 enumeraciones, 13 tablas, índices, restricciones `CHECK`, disparadores de `updated_at`, alta automática de perfil, esquema `private` |
 | `20261016000200_functions.sql` | 1352 | 2 vistas y 19 funciones: transacciones de reserva y cancelación, colas, límite de uso, administración, webhooks |
 | `20261016000300_rls_policies.sql` | 287 | `REVOKE ALL` y concesiones por columna, 20 políticas RLS, barrera anti-escalada de privilegios |
 | `20261016000400_realtime_and_cron.sql` | 158 | Publicación de Realtime, configuración operativa, disparador de tareas, vista de salud, limpieza |
