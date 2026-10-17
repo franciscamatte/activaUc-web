@@ -20,7 +20,9 @@ import { CampoTexto } from "../components/ui/Campo";
  * institucionales. En `@uc.cl` se comprobó que el enlace de
  * confirmación se consumió veinte segundos después de enviarse, sin que
  * nadie iniciara sesión: lo abrió el escáner de enlaces de Microsoft
- * 365, y al ser de un solo uso la persona se queda fuera.
+ * 365. En la confirmación eso deja la cuenta validada sin que nadie
+ * demuestre controlar el buzón; en la recuperación, gasta el token y
+ * deja a la persona sin forma de definir una contraseña nueva.
  *
  * Un código no tiene ese problema: visitarlo no lo gasta, porque no hay
  * nada que visitar.

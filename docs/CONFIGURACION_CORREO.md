@@ -19,12 +19,28 @@ Tres cuentas creadas el 15/10/2026 en el proyecto real:
 Dos problemas distintos, los dos del lado institucional:
 
 **El enlace se consume solo.** El primero quedó usado veinte segundos
-después de enviarse, y nadie inició sesión. Eso no lo hace una persona:
-es el escáner de enlaces de Microsoft 365 (*Safe Links*), que abre los
-enlaces de los mensajes entrantes para comprobar si son maliciosos. Los
-enlaces de Supabase son **de un solo uso**, así que al abrirlos el
-escáner los gasta y la persona se queda fuera, con un «enlace inválido o
-caducado» que no tiene forma de resolver.
+después de enviarse, sin que nadie hubiera iniciado sesión todavía. Eso
+no lo hace una persona: es el escáner de enlaces de Microsoft 365
+(*Safe Links*), que abre los enlaces de los mensajes entrantes para
+comprobar si son maliciosos.
+
+Lo que eso provoca depende de para qué era el enlace, y conviene no
+confundirlo:
+
+- **Confirmación de cuenta.** El escáner la **confirma**. La persona no
+  queda fuera —de hecho puede iniciar sesión, y en este proyecto lo hizo
+  al día siguiente— pero la confirmación pierde todo su sentido: la
+  cuenta queda validada **sin que nadie haya demostrado controlar ese
+  buzón**. Es un problema de seguridad, no de usabilidad. Quien registre
+  una dirección ajena de ese dominio obtiene una cuenta confirmada.
+- **Recuperación de contraseña.** Aquí sí deja fuera. El escáner gasta
+  el token de un solo uso y no define ninguna contraseña nueva, así que
+  la persona llega a un «enlace inválido o caducado» que no puede
+  resolver pidiendo otro: el siguiente correrá la misma suerte.
+
+Una versión anterior de este documento decía que la confirmación dejaba
+a la persona fuera. No es así, y la distinción importa: el caso grave de
+la confirmación es que valida sin prueba.
 
 **La entrega se retrasa.** El tercero no se consumió nunca, y el correo
 de recuperación de las 23:53 llegó «al cabo de un rato». Es el servidor

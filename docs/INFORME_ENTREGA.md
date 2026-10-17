@@ -468,7 +468,10 @@ local y no se suben.
    proyecto real el 15/10/2026: un enlace de confirmación enviado a una
    dirección `@uc.cl` a las 20:14:00 quedó consumido a las 20:14:20 sin que
    nadie iniciara sesión —lo abrió el escáner de enlaces de Microsoft 365— y al
-   ser de un solo uso la cuenta quedó inaccesible. Otra dirección del mismo
+   ser de un solo uso el escáner la dejó confirmada sin que nadie demostrara
+   controlar ese buzón, que es el problema real: valida sin prueba. En la
+   recuperación de contraseña el mismo efecto sí deja a la persona fuera,
+   porque gasta el token sin definir contraseña nueva. Otra dirección del mismo
    dominio no recibió el correo hasta bastante después, lo que apunta además a
    retención del servidor de la universidad.
 
