@@ -219,6 +219,26 @@ Conviene dejar ambas consultas como alerta programada.
 
 ---
 
+## 3.5 Al desplegar, la primera invocación puede ser la vieja
+
+Visto el 17/10/2026 al cambiar el canal de correo a Brevo: el despliegue
+terminó, la prueba se lanzó enseguida y el worker falló con el error del
+proveedor **anterior**. Repetida un minuto después, funcionó sin tocar
+nada.
+
+La explicación es que una instancia ya caliente de la versión previa
+puede atender todavía alguna invocación, y con el despacho inmediato
+—que dispara en 2 s— es fácil caer justo ahí. No es un fallo: es la
+ventana de propagación.
+
+La consecuencia práctica, al probar un cambio de integración: **si falla
+el primer intento con el error de la configuración antigua, repítelo
+antes de investigar.** Lo que distingue un caso del otro es el
+identificador del proveedor que queda en `whatsapp_messages`, que tiene
+forma distinta en cada uno.
+
+---
+
 ## 4. Registros
 
 Los registros de las Edge Functions se leen en el panel de Supabase, una
