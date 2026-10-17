@@ -10,6 +10,13 @@
   command = "npm run build"
   publish = "dist"
 
+  # Netlify cobra por despliegue, no por tráfico: 15 créditos cada uno
+  # de los 300 mensuales, mientras el ancho de banda apenas cuenta. Este
+  # script cancela el build cuando el commit no toca nada que acabe en
+  # lo publicado —documentación, SQL, scripts, Edge Functions— que es la
+  # mayoría. Ojo con la semántica: salir con 0 CANCELA, con 1 compila.
+  ignore = "bash ./scripts/netlify-ignore.sh"
+
 [build.environment]
   # package.json exige >=20.19. Se fija en lugar de confiar en el valor
   # por omisión de Netlify, que cambia con el tiempo y podría quedar por

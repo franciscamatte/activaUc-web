@@ -174,6 +174,50 @@ git remote -v
 > público y fallará el inicio de sesión. Es esperable; lo definitivo es
 > el dominio de producción.
 
+### 2.2.2 Los créditos de Netlify se gastan en despliegues, no en visitas
+
+Medido en esta cuenta el 17/10/2026, con el plan gratuito de 300
+créditos al mes:
+
+| Concepto | Consumo |
+|---|---|
+| 14 despliegues de producción | **210 créditos** |
+| 599 peticiones web | 0,1 |
+| Ancho de banda | 0,2 |
+
+O sea **15 créditos por despliegue**, y el tráfico es ruido. Veinte
+despliegues agotan el mes; mil visitas no se notan. Eso cambia por
+completo dónde hay que tener cuidado: no en cuánta gente use la página,
+sino en cuántas veces se publique.
+
+Y conectado al repositorio, **cada `git push` dispara uno**, incluso si
+el commit sólo toca documentación.
+
+**La regla `ignore` de `netlify.toml`** lo resuelve. Llama a
+[`scripts/netlify-ignore.sh`](../scripts/netlify-ignore.sh), que cancela
+el build cuando el commit no toca nada que acabe en lo publicado: `src/`,
+`public/`, `index.html`, la configuración de Vite o TypeScript,
+`package.json`, `package-lock.json` y el propio `netlify.toml`. Lo demás
+—`docs/`, `supabase/`, `scripts/`— no cambia el sitio y no merece un
+despliegue.
+
+> Ojo con la semántica, que está invertida: el comando `ignore` **cancela**
+> el build al salir con **0** y lo ejecuta al salir con **1**.
+
+Aplicado a los commits de hoy: **6 compilaciones en lugar de 16, 90
+créditos en lugar de 240.** Las diez canceladas eran de documentación.
+
+Si falta la referencia del commit anterior —primer despliegue— compila,
+que es la dirección segura: equivocarse hacia «no compilar» deja el
+sitio viejo publicado sin que nadie se entere.
+
+Dos hábitos que ayudan además:
+
+- **Agrupar los commits** y empujar una vez, en lugar de empujar cada
+  uno.
+- Para una prueba suelta, `npm run build` en local y mirar `dist/` con
+  `npm run preview`, en vez de desplegar para ver.
+
 ### 2.3 Los cuatro ajustes que hay que hacer (importante)
 
 Sin esto la página carga pero el inicio de sesión y Google Calendar
