@@ -174,7 +174,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
-| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 15 documentos de `docs/` |
+| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 16 documentos de `docs/` |
 | `yarn.lock` | Se unificó en npm (`package-lock.json`) para que CI sea reproducible |
 
 ---
@@ -420,13 +420,23 @@ local y no se suben.
    `webhook_events`, con `whatsapp_messages` en `entregado`. Una firma
    falsificada sigue recibiendo `403`.
 
-   Dos salvedades. El **texto** enviado es el de una plantilla de muestra de
-   Twilio, porque en cuenta Trial `ContentSid` es obligatorio y no se permite
-   escribir el mensaje propio («You won't be able to write your own message»);
-   los textos de § 4.1–4.3 requieren salir de Trial, y entonces basta cambiar
-   los tres `TWILIO_CONTENT_SID_*`. Y la **cancelación administrativa** no se
-   ha ejercido contra Twilio: lo verificado de ese tipo de mensaje sigue siendo
-   sólo `50_integrations.sql`.
+   Dos salvedades sobre **WhatsApp**. El texto enviado es el de una plantilla
+   de muestra de Twilio, porque en cuenta Trial `ContentSid` es obligatorio y
+   no se permite escribir el mensaje propio; los textos de § 4.1–4.3 requieren
+   salir de Trial. Y sólo llega a quien haya hecho el `join` del Sandbox en las
+   últimas 24 h: pasado eso, Twilio responde `63016`.
+
+   El **canal de correo**, en cambio, quedó cerrado el 17/10/2026 al migrarlo
+   de Twilio a la API de Brevo. El de Twilio tenía dos restricciones que lo
+   hacían inservible con terceros —contenido limitado a plantillas de muestra y
+   entrega sólo a destinatarios verificados, error `574002`— y Brevo no tiene
+   ninguna en su plan gratuito. Verificado: aviso de reserva con el texto propio
+   de ActivaUC, enviado en 2 s a una dirección que antes fallaba. La elección es
+   por configuración, `BREVO_API_KEY` presente o no, así que el emisor de Twilio
+   se conserva como respaldo.
+
+   La **cancelación administrativa** no se ha ejercido contra ningún proveedor:
+   lo verificado de ese tipo de mensaje sigue siendo sólo `50_integrations.sql`.
 
 3. **Las plantillas de WhatsApp requieren aprobación de Meta**, que es un
    trámite externo de duración variable, y crearlas requiere además salir de

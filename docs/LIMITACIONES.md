@@ -4,9 +4,16 @@ Estado al **17/10/2026**, con <https://activauc.netlify.app> publicado y
 funcionando. La pregunta que responde este documento es concreta: si le
 mandas el enlace a tus compañeros, ¿qué les funciona y qué no?
 
-La respuesta corta: **ven el catálogo y pueden crear cuenta, pero sólo
-dos personas por hora.** Hay tres topes distintos y ninguno está en
-nuestro código.
+La respuesta corta, al **17/10/2026 por la tarde**: **todo lo esencial
+funciona para cualquiera.** Crear cuenta, reservar, cancelar y recibir
+los avisos por correo quedó resuelto esa tarde, con SMTP propio y el
+canal de notificaciones migrado a Brevo. Lo que sigue limitado es
+WhatsApp, y Google Calendar sólo si la pantalla de consentimiento está
+en *Testing*.
+
+Las secciones 2.1 a 2.2.1 describen problemas **ya resueltos**: se
+conservan porque explican por qué el sistema está armado así, y porque
+cualquiera que monte otro entorno se los encontrará de nuevo.
 
 ---
 
@@ -207,25 +214,32 @@ recordatorios futuros y rescate. Ver [OPERACION.md](OPERACION.md).
 
 ---
 
-## 4. Si mañana quieres que el curso lo use
+## 4. Dónde está esto hoy
 
-En orden, porque el primero bloquea a los demás:
+**Hecho el 17/10/2026, y verificado contra el proyecto real:**
 
-1. **SMTP propio.** Sin esto hay registros, pero a dos por hora en todo
-   el proyecto, así que un curso entero no entra. Es gratis y sube el
-   cupo a 30 por hora, ajustable.
-2. **Las dos plantillas de correo** en Authentication → Emails →
-   Templates, o los correos seguirán llevando el enlace que los
-   escáneres institucionales consumen
-   ([CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 2.1).
-3. **Pasar la pantalla de Google a *In production***, para que la
-   conexión de calendario no caduque cada semana.
-4. **WhatsApp**: asumir que no está disponible, o salir de Trial. No hay
-   punto medio que sirva para terceros.
+| | Estado |
+|---|---|
+| SMTP propio (Brevo) | listo · cupo de 30/hora en lugar de 2 |
+| Plantillas de correo con código, sin enlace | listas |
+| Registro con un correo cualquiera | comprobado con tres dominios distintos |
+| Avisos de reserva por correo | comprobados, por Brevo, en 2 s |
 
-Con 1 y 2 hechos, tus compañeros pueden registrarse, reservar, cancelar,
-recibir el correo de confirmación y ver la disponibilidad en vivo. Con 3,
-además conectar su calendario. El 4 es el único que cuesta dinero.
+Con eso, cualquiera a quien le pases el enlace puede registrarse,
+reservar, cancelar, recibir su confirmación por correo y ver la
+disponibilidad en vivo.
+
+**Lo que queda, y ninguno bloquea lo anterior:**
+
+1. **Pasar la pantalla de Google a *In production***, si quieres que tus
+   compañeros conecten su calendario sin que la autorización les caduque
+   cada semana. Gratis, y sigue con el tope de 100 personas.
+2. **WhatsApp**: hoy sólo funciona con quien haya hecho el `join` en las
+   últimas 24 h. Para que sirva de verdad hay que salir de Trial de
+   Twilio y que Meta apruebe las tres plantillas. Es lo único que cuesta
+   dinero, y el correo ya cubre la misma necesidad.
+3. **Vigilar las caducidades** de § 2.5 durante el periodo de
+   evaluación.
 
 ---
 
