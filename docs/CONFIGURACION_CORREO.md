@@ -91,9 +91,16 @@ En modo simulado (sin `.env`) el código es siempre `000000`.
 ## 3. El segundo problema: SMTP propio
 
 El retraso de entrega no lo arregla el código. Lo arregla dejar de usar
-el emisor por omisión de Supabase, que además **está limitado a unos
-pocos correos por hora** y la propia documentación de Supabase marca
-como sólo para pruebas.
+el emisor por omisión de Supabase, que además está limitado a **2
+correos por hora y por proyecto**, contados juntos para registros,
+recuperaciones e invitaciones, y que la propia documentación de Supabase
+marca como sólo para pruebas.
+
+Comprobado el 17/10/2026: encadenando solicitudes de restablecimiento,
+la segunda ya recibió el `429`. En cambio una cuenta con correo ajeno a
+la organización de Supabase **sí** recibió su código, así que la
+restricción de «sólo miembros de la organización» que afirman varias
+guías no aplica aquí: el problema es el cupo, no el destinatario.
 
 Panel → **Project Settings → Authentication → SMTP Settings** →
 *Enable Custom SMTP*:

@@ -4,8 +4,9 @@ Estado al **17/10/2026**, con <https://activauc.netlify.app> publicado y
 funcionando. La pregunta que responde este documento es concreta: si le
 mandas el enlace a tus compañeros, ¿qué les funciona y qué no?
 
-La respuesta corta: **ven el catálogo, pero no pueden crear cuenta.** Hay
-tres topes distintos y ninguno está en nuestro código.
+La respuesta corta: **ven el catálogo y pueden crear cuenta, pero sólo
+dos personas por hora.** Hay tres topes distintos y ninguno está en
+nuestro código.
 
 ---
 
@@ -31,16 +32,28 @@ veces en un minuto.
 
 El servicio de correo incorporado de Supabase está limitado a **2 correos
 por hora**, contados **por proyecto** y compartidos entre registro,
-recuperación de contraseña e invitaciones. Y hay algo peor que el cupo:
-varias guías coinciden en que **sólo entrega a miembros de tu
-organización de Supabase**.
+recuperación de contraseña e invitaciones. Ese es el tope, y es oficial.
 
-Si eso último se cumple, tus compañeros no reciben el código de
-confirmación **en absoluto**, no es que les llegue lento. Explicaría por
-qué a ti sí te llega: eres quien creó la organización.
+**Comprobado el 17/10/2026, y en los dos sentidos:**
 
-> Esto es lo único que impide compartir la página hoy. Sin correo de
-> confirmación no hay cuenta, y sin cuenta no hay reserva.
+- Una cuenta con un correo **ajeno a la organización de Supabase**
+  (`@alumnos.colegiosma.cl`) recibió su código de confirmación sin
+  problema. Varias guías de terceros afirman que el servicio incorporado
+  sólo entrega a miembros de la organización; **en este proyecto no es
+  así**. Una versión anterior de este documento lo daba por probable, y
+  era falso.
+- Encadenando solicitudes de restablecimiento de contraseña, la segunda
+  ya fue rechazada: la aplicación mostró «Hiciste demasiadas solicitudes
+  seguidas», que es la traducción del `429` de Supabase.
+
+> Es decir: tus compañeros **sí** pueden registrarse, pero **de dos en
+> dos por hora**, contando todo el proyecto junto. Con un curso de
+> treinta personas eso es media jornada de espera, y cualquiera que pida
+> recuperar su contraseña consume el cupo de otro.
+
+Lo bueno de que el tope se note así: el `429` llega traducido a una frase
+que se entiende, no a un fallo silencioso. Eso está en
+`src/lib/errors.ts` y lo cubre `errors.test.ts`.
 
 **Cómo se levanta:** SMTP propio. El cupo pasa a 30 correos por hora
 —ajustable en Authentication → Rate Limits— y la entrega deja de
@@ -125,8 +138,9 @@ recordatorios futuros y rescate. Ver [OPERACION.md](OPERACION.md).
 
 En orden, porque el primero bloquea a los demás:
 
-1. **SMTP propio.** Sin esto no hay registros, y por tanto nada más
-   importa. Es gratis.
+1. **SMTP propio.** Sin esto hay registros, pero a dos por hora en todo
+   el proyecto, así que un curso entero no entra. Es gratis y sube el
+   cupo a 30 por hora, ajustable.
 2. **Las dos plantillas de correo** en Authentication → Emails →
    Templates, o los correos seguirán llevando el enlace que los
    escáneres institucionales consumen
