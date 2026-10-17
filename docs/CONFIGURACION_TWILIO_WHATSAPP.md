@@ -439,6 +439,7 @@ El worker los clasifica para decidir si reintenta
 | `21614` | No es un móvil válido | No | Corregir el número |
 | `63003` | El destino no tiene WhatsApp | No | Informar a la persona |
 | `63024` | Mensaje no permitido (fuera de ventana, sin plantilla) | No | Usar plantilla aprobada |
+| `63016` | Mensaje iniciado por la empresa **fuera de la ventana de 24 h** | No | Que la persona vuelva a escribir al Sandbox, o usar plantilla aprobada. Visto el 17/10/2026: el mismo envío se entregó 6 h después del `join` y falló a las 35 h |
 | `21654` | `ContentSid Required` | No | Tres causas posibles, en este orden: el `From` no es el número de tu Sandbox; la cuenta exige plantilla y los `TWILIO_CONTENT_SID_*` están vacíos; o se enviaron `ContentVariables` sin `ContentSid` |
 | `20003` | La función no está disponible en cuenta Trial | No | Salir de Trial; afecta al Content API, o sea a las plantillas |
 | `20429` | Demasiadas solicitudes | Sí | Se reintenta con retroceso |

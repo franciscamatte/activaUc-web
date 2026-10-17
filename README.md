@@ -172,6 +172,7 @@ Detalle completo en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 |---|---|
 | [ARRANQUE_LOCAL.md](docs/ARRANQUE_LOCAL.md) | **Empieza aquí**: cómo levantar la página en tu computador |
 | [COMPARTIR.md](docs/COMPARTIR.md) | Cómo publicarla para que la usen otras personas |
+| [LIMITACIONES.md](docs/LIMITACIONES.md) | **Qué puede hacer hoy alguien a quien le pases el enlace**, y los tres topes que lo impiden |
 | [REQUISITOS_IMPLEMENTADOS.md](docs/REQUISITOS_IMPLEMENTADOS.md) | Matriz REQ-1 a REQ-33 con la evidencia de cada requisito |
 | [CONFIGURACION_SUPABASE.md](docs/CONFIGURACION_SUPABASE.md) | Proyecto, migraciones, Auth, Realtime y secretos |
 | [CONFIGURACION_CORREO.md](docs/CONFIGURACION_CORREO.md) | Confirmación y recuperación por código, SMTP propio, correo institucional |
