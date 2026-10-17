@@ -110,6 +110,32 @@ pasar a *In production* aunque salga el aviso de app no verificada.
 
 ---
 
+### 2.4 El proyecto de Supabase se pausa solo
+
+En el plan gratuito, **un proyecto se pausa tras una semana sin
+actividad**. Reanudarlo es un botón en el panel, pero mientras está
+pausado la página responde pero no funciona: nada de iniciar sesión,
+reservar ni consultar disponibilidad.
+
+Para una entrega evaluada esto importa más de lo que parece: si dejas de
+tocar el proyecto y el curso lo revisa dos semanas después, se lo
+encuentran caído y parecerá que no funciona.
+
+Mitigaciones, de menos a más:
+
+- **Entrar al panel o usar la página** cada pocos días durante el
+  periodo de evaluación. El cron de un minuto genera actividad de base
+  de datos, pero no está claro que cuente como actividad a estos
+  efectos, así que no conviene confiarse.
+- **Avisar en la entrega** que el proyecto puede necesitar reanudarse, y
+  cómo.
+- **Plan Pro** si el proyecto tiene que estar disponible sin vigilancia.
+
+No lo verifiqué en este proyecto —habría que dejarlo una semana sin
+tocar— así que viene de la documentación de precios de Supabase.
+
+---
+
 ## 3. Topes de plataforma que no te van a afectar
 
 Supabase y Netlify tienen cupos en sus planes gratuitos —tamaño de base
