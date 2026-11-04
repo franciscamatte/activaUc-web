@@ -124,7 +124,8 @@ src/
   test/          Pruebas de integración de Google Calendar y Twilio
 
 supabase/
-  migrations/    Esquema, funciones, RLS, Realtime, series, despacho y canal de correo (8 migraciones ordenadas)
+  migrations/    Esquema, funciones, RLS, Realtime, series, despacho, canal de correo,
+                 rol general y avisos de cupo (10 migraciones ordenadas)
   functions/     7 Edge Functions + módulos compartidos en _shared/
   tests/         Pruebas SQL de esquema, reservas, cancelaciones, RLS e integraciones
   cron/          Programación de tareas con pg_cron (se ejecuta una vez por entorno)
@@ -173,7 +174,7 @@ Detalle completo en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 | [ARRANQUE_LOCAL.md](docs/ARRANQUE_LOCAL.md) | **Empieza aquí**: cómo levantar la página en tu computador |
 | [COMPARTIR.md](docs/COMPARTIR.md) | Cómo publicarla para que la usen otras personas |
 | [LIMITACIONES.md](docs/LIMITACIONES.md) | **Qué puede hacer hoy alguien a quien le pases el enlace**, y los tres topes que lo impiden |
-| [BASE_DE_DATOS.md](docs/BASE_DE_DATOS.md) | Cómo funciona la base: las 13 tablas, cómo se evita el sobrecupo y por qué el navegador no puede hacer trampa |
+| [BASE_DE_DATOS.md](docs/BASE_DE_DATOS.md) | Cómo funciona la base: las 14 tablas, cómo se evita el sobrecupo y por qué el navegador no puede hacer trampa |
 | [REQUISITOS_IMPLEMENTADOS.md](docs/REQUISITOS_IMPLEMENTADOS.md) | Matriz REQ-1 a REQ-33 con la evidencia de cada requisito |
 | [CONFIGURACION_SUPABASE.md](docs/CONFIGURACION_SUPABASE.md) | Proyecto, migraciones, Auth, Realtime y secretos |
 | [CONFIGURACION_CORREO.md](docs/CONFIGURACION_CORREO.md) | Confirmación y recuperación por código, SMTP propio, correo institucional |

@@ -38,6 +38,12 @@ export interface EstadoDemo {
   }>;
   recintos: Recinto[];
   bloques: Bloque[];
+  /** Solicitudes de aviso por liberación de cupo. */
+  avisosDeCupo: Array<{
+    bloqueId: string;
+    usuarioId: string;
+    avisadoEn: string | null;
+  }>;
   reservas: Reserva[];
   asignaciones: AsignacionDemo[];
   auditoria: EntradaAuditoria[];
@@ -48,6 +54,11 @@ export interface EstadoDemo {
 export const CUENTAS_DEMO = [
   { correo: "camila@uc.cl", contrasena: "activauc2026", rol: "usuario" as Rol },
   { correo: "admin@uc.cl", contrasena: "activauc2026", rol: "administrador" as Rol },
+  {
+    correo: "general@uc.cl",
+    contrasena: "activauc2026",
+    rol: "administrador_general" as Rol,
+  },
 ];
 
 /** Devuelve una fecha a N días y a la hora indicada, en horario local. */
@@ -61,6 +72,7 @@ function enDias(dias: number, hora: number, minuto = 0): Date {
 export function crearDatosDemo(): EstadoDemo {
   const usuarioId = "11111111-1111-4111-8111-111111111111";
   const adminId = "22222222-2222-4222-8222-222222222222";
+  const generalId = "cccccccc-0000-4000-8000-000000000003";
 
   const recintos: Recinto[] = [
     {
@@ -213,9 +225,23 @@ export function crearDatosDemo(): EstadoDemo {
         correoConsentido: false,
         correoConsentidoEn: null,
       },
+      {
+        id: generalId,
+        correo: "general@uc.cl",
+        contrasena: "activauc2026",
+        nombre: "Dirección de Deportes",
+        rol: "administrador_general",
+        confirmado: true,
+        telefono: null,
+        whatsappConsentido: false,
+        whatsappConsentidoEn: null,
+        correoConsentido: false,
+        correoConsentidoEn: null,
+      },
     ],
     recintos,
     bloques,
+    avisosDeCupo: [],
     reservas,
     asignaciones: recintos.map((recinto, indice) => ({
       id: `eeeeeeee-0000-4000-8000-${String(indice).padStart(12, "0")}`,

@@ -26,6 +26,8 @@ import {
 } from "../domain/codigoVerificacion";
 import { config } from "../lib/env";
 import type {
+  RecintoAsignable,
+  AdministradorListado,
   Bloque,
   ConexionCalendario,
   Disponibilidad,
@@ -242,6 +244,158 @@ export class MockRepository implements ActivaRepository {
 
   async reenviarConfirmacion(correo: string): Promise<void> {
     void correo;
+  }
+
+  async solicitarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }> {
+    const cuenta = this.cuentaActual();
+    const bloque = this.estado.bloques.find((b) => b.id === bloqueId);
+    if (!bloque || !bloque.activo) {
+      return { ok: false, mensaje: "Ese bloque no está disponible." };
+    }
+    if (new Date(bloque.inicio).getTime() <= Date.now()) {
+      return { ok: false, mensaje: "Ese bloque ya comenzó." };
+    }
+
+    const vigentes = this.estado.reservas.filter(
+      (r) => r.bloqueId === bloqueId && r.estado === "vigente",
+    );
+    if (vigentes.some((r) => r.usuarioId === cuenta.id)) {
+      return { ok: false, mensaje: "Ya tienes una reserva en ese bloque." };
+    }
+    if (bloque.capacidadMaxima - vigentes.length > 0) {
+      return { ok: false, mensaje: "Ese bloque tiene cupos: puedes reservarlo ahora." };
+    }
+
+    const ya = this.estado.avisosDeCupo.find(
+      (a) => a.bloqueId === bloqueId && a.usuarioId === cuenta.id,
+    );
+    if (ya) {
+      ya.avisadoEn = null;
+    } else {
+      this.estado.avisosDeCupo.push({
+        bloqueId,
+        usuarioId: cuenta.id,
+        avisadoEn: null,
+      });
+    }
+    this.guardar();
+    return {
+      ok: true,
+      mensaje: "Listo: te avisaremos si se libera un cupo. El cupo es de quien reserve primero.",
+    };
+  }
+
+  async cancelarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }> {
+    const cuenta = this.cuentaActual();
+    this.estado.avisosDeCupo = this.estado.avisosDeCupo.filter(
+      (a) => !(a.bloqueId === bloqueId && a.usuarioId === cuenta.id),
+    );
+    this.guardar();
+    return { ok: true, mensaje: "Ya no te avisaremos de ese bloque." };
+  }
+
+  async listarAvisosDeCupo(): Promise<string[]> {
+    if (!this.sesion) return [];
+    const cuenta = this.cuentaActual();
+    return this.estado.avisosDeCupo
+      .filter((a) => a.usuarioId === cuenta.id && a.avisadoEn === null)
+      .map((a) => a.bloqueId);
+  }
+
+  // =================================================================
+  // Administrador general (REQ-29)
+  // =================================================================
+
+  private exigirAdministradorGeneral(): CuentaDemo {
+    const cuenta = this.cuentaActual();
+    if (cuenta.rol !== "administrador_general") {
+      throw new AppError(
+        "permisos",
+        "Sólo el administrador general puede gestionar administradores.",
+      );
+    }
+    return cuenta;
+  }
+
+  async listarAdministradores(): Promise<AdministradorListado[]> {
+    this.exigirAdministradorGeneral();
+    return this.estado.cuentas
+      .filter((c) => c.rol === "administrador" || c.rol === "administrador_general")
+      .map((c) => ({
+        correo: c.correo,
+        nombre: c.nombre,
+        rol: c.rol,
+        recintos: this.estado.asignaciones
+          .filter((a) => a.administradorId === c.id)
+          .map((a) => this.estado.recintos.find((r) => r.id === a.recintoId)?.nombre ?? "")
+          .filter((n) => n !== "")
+          .sort(),
+      }));
+  }
+
+  async listarRecintosAsignables(): Promise<RecintoAsignable[]> {
+    this.exigirAdministradorGeneral();
+    return this.estado.recintos
+      .map((r) => ({ id: r.id, nombre: r.nombre, activo: r.activo }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+
+  async asignarAdministrador(
+    correo: string,
+    recintoIds: string[],
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    const actor = this.exigirAdministradorGeneral();
+    const cuenta = this.cuenta(correo);
+    if (!cuenta) {
+      return { ok: false, mensaje: "No existe una cuenta con ese correo. Créala primero." };
+    }
+    if (cuenta.id === actor.id) {
+      return { ok: false, mensaje: "No puedes cambiar tu propio rol." };
+    }
+    if (cuenta.rol === "administrador_general") {
+      return {
+        ok: false,
+        mensaje: "Esa cuenta es administradora general; su rol no se cambia desde aquí.",
+      };
+    }
+    if (recintoIds.some((id) => !this.estado.recintos.some((r) => r.id === id))) {
+      return { ok: false, mensaje: "Hay recintos que no existen." };
+    }
+
+    cuenta.rol = "administrador";
+    for (const recintoId of recintoIds) {
+      const ya = this.estado.asignaciones.some(
+        (a) => a.administradorId === cuenta.id && a.recintoId === recintoId,
+      );
+      if (!ya) this.estado.asignaciones.push({
+        id: `aaaa-${cuenta.id.slice(-4)}-${recintoId.slice(-4)}`,
+        administradorId: cuenta.id,
+        recintoId,
+      });
+    }
+    this.guardar();
+    return {
+      ok: true,
+      mensaje: `Cuenta habilitada como administradora de ${recintoIds.length} recinto(s).`,
+    };
+  }
+
+  async quitarAdministrador(correo: string): Promise<{ ok: boolean; mensaje: string }> {
+    const actor = this.exigirAdministradorGeneral();
+    const cuenta = this.cuenta(correo);
+    if (!cuenta) return { ok: false, mensaje: "No existe una cuenta con ese correo." };
+    if (cuenta.id === actor.id) {
+      return { ok: false, mensaje: "No puedes cambiar tu propio rol." };
+    }
+
+    const antes = this.estado.asignaciones.length;
+    this.estado.asignaciones = this.estado.asignaciones.filter((a) => a.administradorId !== cuenta.id);
+    if (cuenta.rol === "administrador") cuenta.rol = "usuario";
+    this.guardar();
+    return {
+      ok: true,
+      mensaje: `Rol retirado y ${antes - this.estado.asignaciones.length} asignación(es) eliminada(s).`,
+    };
   }
 
   async definirConsentimientoCorreo(
@@ -698,6 +852,15 @@ export class MockRepository implements ActivaRepository {
 
   async listarRecintosAsignados(): Promise<Recinto[]> {
     const cuenta = this.cuentaActual();
+
+    // El administrador general gestiona todos los recintos: su alcance
+    // no viene de las asignaciones, igual que en el backend real.
+    if (cuenta.rol === "administrador_general") {
+      return [...this.estado.recintos].sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, "es"),
+      );
+    }
+
     const ids = new Set(
       this.estado.asignaciones
         .filter((a) => a.administradorId === cuenta.id)

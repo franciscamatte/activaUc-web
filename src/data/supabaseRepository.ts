@@ -24,6 +24,8 @@ import {
   normalizarCodigo,
 } from "../domain/codigoVerificacion";
 import type {
+  RecintoAsignable,
+  AdministradorListado,
   Bloque,
   ConexionCalendario,
   Disponibilidad,
@@ -325,6 +327,98 @@ export class SupabaseRepository implements ActivaRepository {
     if (error) throw aAppError(error, "guardar tu nombre");
   }
 
+  // =================================================================
+  // Aviso de cupo liberado
+  // =================================================================
+
+  async solicitarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("solicitar_aviso_de_cupo", {
+      _block_id: bloqueId,
+    });
+    if (error) throw aAppError(error, "pedir el aviso de cupo");
+    const r = data as { ok: boolean; mensaje?: string };
+    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos registrar el aviso." };
+  }
+
+  async cancelarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("cancelar_aviso_de_cupo", {
+      _block_id: bloqueId,
+    });
+    if (error) throw aAppError(error, "cancelar el aviso de cupo");
+    const r = data as { ok: boolean; mensaje?: string };
+    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos cancelar el aviso." };
+  }
+
+  async listarAvisosDeCupo(): Promise<string[]> {
+    const sesion = await this.obtenerSesion();
+    if (!sesion) return [];
+
+    // RLS ya limita las filas a las propias; el filtro por notified_at
+    // deja fuera los avisos ya enviados, que están consumidos.
+    const { data, error } = await this.cliente
+      .from("block_watchers")
+      .select("block_id")
+      .is("notified_at", null);
+
+    if (error) throw aAppError(error, "consultar tus avisos de cupo");
+    return (data ?? []).map((f) => (f as { block_id: string }).block_id);
+  }
+
+  // =================================================================
+  // Administrador general (REQ-29)
+  // =================================================================
+
+  async listarAdministradores(): Promise<AdministradorListado[]> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("admin_general_listar_administradores");
+    if (error) throw aAppError(error, "listar los administradores");
+    return ((data ?? []) as unknown[]).map((f) => {
+      const fila = f as { correo: string; nombre: string; rol: Rol; recintos: string[] | null };
+      return {
+        correo: fila.correo,
+        nombre: fila.nombre,
+        rol: fila.rol,
+        recintos: fila.recintos ?? [],
+      };
+    });
+  }
+
+  async listarRecintosAsignables(): Promise<RecintoAsignable[]> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("admin_general_listar_recintos");
+    if (error) throw aAppError(error, "listar los recintos");
+    return ((data ?? []) as unknown[]).map((f) => {
+      const fila = f as { id: string; nombre: string; activo: boolean };
+      return { id: fila.id, nombre: fila.nombre, activo: fila.activo };
+    });
+  }
+
+  async asignarAdministrador(
+    correo: string,
+    recintoIds: string[],
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("admin_general_asignar_administrador", {
+      _correo: correo.trim().toLowerCase(),
+      _recintos: recintoIds,
+    });
+    if (error) throw aAppError(error, "asignar el administrador");
+    const r = data as { ok: boolean; mensaje?: string };
+    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos completar la asignación." };
+  }
+
+  async quitarAdministrador(correo: string): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("admin_general_quitar_administrador", {
+      _correo: correo.trim().toLowerCase(),
+    });
+    if (error) throw aAppError(error, "quitar el administrador");
+    const r = data as { ok: boolean; mensaje?: string };
+    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos quitar el rol." };
+  }
+
   async definirConsentimientoCorreo(
     consentido: boolean,
   ): Promise<{ ok: boolean; mensaje: string }> {
@@ -616,6 +710,20 @@ export class SupabaseRepository implements ActivaRepository {
    */
   async listarRecintosAsignados(): Promise<Recinto[]> {
     const sesion = await this.exigirSesion();
+
+    // El administrador general gestiona todos los recintos de la
+    // organización, así que no pasa por las asignaciones. RLS ya se lo
+    // permite —is_facility_admin lo reconoce— pero aquí hay que pedirlos
+    // sin filtrar por asignación o no vería ninguno.
+    const perfil = await this.obtenerPerfil();
+    if (perfil?.rol === "administrador_general") {
+      const { data, error } = await this.cliente
+        .from("facilities")
+        .select("id, name, facility_type, description, operation_hours, active")
+        .order("name");
+      if (error) throw aAppError(error, "cargar los recintos");
+      return (data ?? []).map((f) => aRecinto(f as FilaRecinto));
+    }
 
     const { data: asignaciones, error: errorAsignaciones } = await this.cliente
       .from("facility_admin_assignments")

@@ -11,7 +11,8 @@ declare
     'profiles', 'facilities', 'time_blocks', 'facility_admin_assignments',
     'reservations', 'reservation_audit_log', 'calendar_connections',
     'calendar_sync_jobs', 'whatsapp_messages', 'notification_jobs',
-    'webhook_events', 'oauth_states', 'rate_limit_counters'
+    'webhook_events', 'oauth_states', 'rate_limit_counters',
+    'block_watchers'
   ];
 begin
   select array_agg(t) into _faltantes
@@ -23,7 +24,7 @@ begin
   assert _faltantes is null,
     format('Faltan tablas requeridas: %s', _faltantes);
 
-  raise notice 'OK · las 13 tablas de dominio existen';
+  raise notice 'OK · las 14 tablas de dominio existen';
 end;
 $$;
 

@@ -14,7 +14,12 @@
  * plantilla registrada en Twilio (ver docs/CONFIGURACION_TWILIO_WHATSAPP.md).
  */
 
-export type NotificationKind = "confirmacion" | "recordatorio" | "cancelacion_admin";
+export type NotificationKind =
+  | "confirmacion"
+  | "recordatorio"
+  | "cancelacion_admin"
+  /** Aviso de que se liberó un cupo en un bloque que estaba lleno. */
+  | "cupo_liberado";
 
 export interface MessageContext {
   nombre: string;
@@ -51,6 +56,11 @@ export function buildBody(kind: NotificationKind, ctx: MessageContext): string {
         `fue cancelada por la administración del recinto` +
         (ctx.motivo ? ` (motivo: ${ctx.motivo})` : "") +
         `. Puedes reservar otro bloque disponible en ActivaUC.`;
+    case "cupo_liberado":
+      // Se dice explícitamente que no está reservado: el aviso avisa, no
+      // guarda el cupo, y prometer lo contrario sería engañoso.
+      return `Hola ${ctx.nombre}: se liberó un cupo en ${ctx.recinto} para el ${ctx.fechaHora}. ` +
+        `Todavía no es tuyo: entra a ActivaUC y resérvalo, lo toma quien reserve primero.`;
   }
 }
 
@@ -66,6 +76,14 @@ function ordenPorOmision(kind: NotificationKind): CampoPlantilla[] {
   const base: CampoPlantilla[] = ["nombre", "recinto", "fechaHora"];
   return kind === "cancelacion_admin" ? [...base, "motivo"] : base;
 }
+
+/**
+ * El aviso de cupo liberado no tiene plantilla propia en Twilio: usa la
+ * de confirmación si está configurada, porque su contenido es del mismo
+ * tipo —recinto y horario— y crear una cuarta plantilla aprobada por
+ * Meta para esto sería trabajo sin ganancia. Por correo, en cambio, sí
+ * tiene su propio asunto y cuerpo.
+ */
 
 function valorDeCampo(campo: CampoPlantilla, ctx: MessageContext): string {
   switch (campo) {
@@ -138,6 +156,7 @@ export function buildContentVariables(
 export function contentVarsEnvVar(kind: NotificationKind): string {
   switch (kind) {
     case "confirmacion":
+    case "cupo_liberado":
       return "TWILIO_CONTENT_VARS_CONFIRMACION";
     case "recordatorio":
       return "TWILIO_CONTENT_VARS_RECORDATORIO";
@@ -150,6 +169,7 @@ export function contentVarsEnvVar(kind: NotificationKind): string {
 export function contentSidEnvVar(kind: NotificationKind): string {
   switch (kind) {
     case "confirmacion":
+    case "cupo_liberado":
       return "TWILIO_CONTENT_SID_CONFIRMACION";
     case "recordatorio":
       return "TWILIO_CONTENT_SID_RECORDATORIO";
@@ -174,6 +194,8 @@ export function buildSubject(kind: NotificationKind, ctx: MessageContext): strin
       return `Recordatorio · tu reserva en ${ctx.recinto} es hoy`;
     case "cancelacion_admin":
       return `Reserva cancelada · ${ctx.recinto}`;
+    case "cupo_liberado":
+      return `Se liberó un cupo · ${ctx.recinto}`;
   }
 }
 

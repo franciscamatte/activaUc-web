@@ -33,20 +33,27 @@ avisos por WhatsApp de forma automática cuando cancelas su reserva.
 
 ## Obtener acceso
 
-El rol de administrador **no se puede asignar desde la aplicación**: es una
-medida de seguridad deliberada. El procedimiento es:
+Nadie se concede el rol a sí mismo: eso es deliberado. El procedimiento
+es siempre el mismo, y el primer paso lo das tú.
 
 1. Crea tu cuenta normalmente en ActivaUC y confirma tu correo.
-2. Pide al equipo técnico de Deportes UC que te asigne el rol y los recintos.
-   Lo hacen con un comando documentado (`scripts/seed-usuarios.sh`).
+2. Pide al **administrador general** de Deportes UC que te conceda el rol y
+   te asigne tus recintos. Lo hace desde el panel, en la pestaña
+   **Administradores**, con tu correo.
 3. Vuelve a iniciar sesión: aparecerá **Administración** en la barra de
    navegación.
+
+> Si todavía no existe ningún administrador general, el equipo técnico crea
+> el primero con acceso directo a la base:
+> `bash scripts/seed-usuarios.sh --correo <correo> --administrador-general`.
+> Ese rol no se concede desde la aplicación para que una cuenta comprometida
+> no pueda crear más.
 
 ---
 
 ## Panel de administración
 
-Cinco secciones.
+Cinco secciones, y una sexta si eres administrador general.
 
 ### Recintos
 
@@ -172,6 +179,33 @@ credenciales.
 
 Es la herramienta para responder «¿qué pasó con esta reserva?»: muestra el
 historial completo.
+
+---
+
+### Administradores (sólo administrador general)
+
+Aquí se concede y se retira el rol de administrador de recintos.
+
+Para habilitar a alguien: la persona **tiene que haberse registrado antes**
+en ActivaUC. Escribes su correo, marcas los recintos a su cargo y pulsas
+«Conceder el rol». Si el correo no corresponde a ninguna cuenta se dice
+explícitamente, en lugar de crear una cuenta con una contraseña que habría
+que comunicarle por un canal que nadie controla.
+
+El listado de abajo muestra quién administra qué. «Quitar rol» devuelve la
+cuenta a usuario común y retira sus asignaciones; **las reservas de los
+usuarios de esos recintos no se tocan**, porque cambiar de personal no es
+dar de baja un servicio.
+
+Dos cosas que el panel no permite, a propósito:
+
+- Cambiar tu propio rol.
+- Conceder el rol de administrador general. Ese se asigna sólo con acceso
+  directo a la base, de modo que si una cuenta de administrador general se
+  viera comprometida, no podría multiplicarse.
+
+Como administrador general ves y gestionas **todos** los recintos de la
+organización, sin que nadie te los asigne: tu alcance viene del rol.
 
 ---
 

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { useDisponibilidad } from "../state/useDisponibilidad";
 import { useOnline } from "../state/useOnline";
@@ -31,12 +31,32 @@ export default function CatalogoPage() {
 
   const [filtros, setFiltros] = useState<FiltrosCatalogo>(filtrosVacios);
   const [borrador, setBorrador] = useState<FiltrosCatalogo>(filtrosVacios);
-  const [seleccionado, setSeleccionado] = useState<Disponibilidad | null>(null);
+  const [elegidoAMano, setElegidoAMano] = useState<Disponibilidad | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoReserva | null>(null);
   const [errorReserva, setErrorReserva] = useState<string | null>(null);
 
+  // Solicitud de cambio · aviso de cupo liberado.
+  const [avisoEnCurso, setAvisoEnCurso] = useState<string | null>(null);
+  const [mensajeAviso, setMensajeAviso] = useState<string | null>(null);
+  const [errorAviso, setErrorAviso] = useState<string | null>(null);
+
+  // Solicitud de cambio · volver al bloque elegido después de entrar.
+  const [parametros, setParametros] = useSearchParams();
+  const bloquePedido = parametros.get("bloque");
+
   const disponibilidad = useDisponibilidad(repositorio, filtros, { enLinea });
+
+  const cargarAvisos = useCallback(
+    () => (repositorio && perfil ? repositorio.listarAvisosDeCupo() : Promise.resolve([])),
+    [repositorio, perfil],
+  );
+  // Vía useAsync y no con un efecto que escriba estado: es el patrón
+  // que el resto de la página ya usa, y un fallo al cargar esta lista
+  // sólo quita el saber de qué bloques hay aviso pedido, sin estropear
+  // el catálogo.
+  const avisosAsync = useAsync<string[]>(repositorio && perfil ? cargarAvisos : null);
+  const avisos = avisosAsync.datos ?? [];
 
   const cargarRecintos = useCallback(
     () => (repositorio ? repositorio.listarRecintos() : Promise.resolve([])),
@@ -73,6 +93,32 @@ export default function CatalogoPage() {
   }, [disponibilidad.bloques]);
 
   const filtrosAplicados = JSON.stringify(filtros) !== JSON.stringify(filtrosVacios);
+  // Al volver de iniciar sesión se abre la confirmación del bloque que
+  // la persona había elegido. Se deriva de la URL en lugar de escribirse
+  // en un efecto: así no hay un render intermedio con el diálogo cerrado
+  // y el compilador de React no tiene nada que objetar.
+  const bloqueDesdeUrl = useMemo(() => {
+    if (!bloquePedido || !perfil) return null;
+    return disponibilidad.bloques.find((b) => b.bloqueId === bloquePedido) ?? null;
+  }, [bloquePedido, perfil, disponibilidad.bloques]);
+
+  const urlPideBloqueNoDisponible =
+    bloqueDesdeUrl !== null &&
+    !puedeReservarBloque(bloqueDesdeUrl, reservasPropias).permitido;
+
+  const seleccionado =
+    elegidoAMano ?? (urlPideBloqueNoDisponible ? null : bloqueDesdeUrl);
+
+  /** Cierra la confirmación, venga de un clic o de la URL. */
+  function limpiarSeleccion() {
+    setElegidoAMano(null);
+    if (parametros.has("bloque")) {
+      const nuevos = new URLSearchParams(parametros);
+      nuevos.delete("bloque");
+      setParametros(nuevos, { replace: true });
+    }
+  }
+
   const paso: 1 | 2 | 3 | 4 = resultado?.ok ? 4 : seleccionado ? 3 : filtrosAplicados ? 2 : 1;
 
   function aplicarFiltros(evento: FormEvent) {
@@ -90,10 +136,43 @@ export default function CatalogoPage() {
     setResultado(null);
 
     if (!perfil) {
-      navegar("/login", { state: { destino: "/catalogo" } });
+      // El id viaja en el destino para volver a ESTE bloque y no al
+      // catálogo genérico: quien entró para reservar algo concreto no
+      // debería tener que buscarlo otra vez.
+      navegar("/login", {
+        state: { destino: `/catalogo?bloque=${encodeURIComponent(bloque.bloqueId)}` },
+      });
       return;
     }
-    setSeleccionado(bloque);
+    setElegidoAMano(bloque);
+  }
+
+  async function alternarAviso(bloque: Disponibilidad) {
+    setMensajeAviso(null);
+    setErrorAviso(null);
+
+    if (!perfil) {
+      navegar("/login", {
+        state: { destino: `/catalogo?bloque=${encodeURIComponent(bloque.bloqueId)}` },
+      });
+      return;
+    }
+    if (!repositorio) return;
+
+    setAvisoEnCurso(bloque.bloqueId);
+    try {
+      const pedido = avisos.includes(bloque.bloqueId);
+      const r = pedido
+        ? await repositorio.cancelarAvisoDeCupo(bloque.bloqueId)
+        : await repositorio.solicitarAvisoDeCupo(bloque.bloqueId);
+      if (r.ok) setMensajeAviso(r.mensaje);
+      else setErrorAviso(r.mensaje);
+      await avisosAsync.recargar();
+    } catch (e) {
+      setErrorAviso(aAppError(e, "gestionar el aviso de cupo").message);
+    } finally {
+      setAvisoEnCurso(null);
+    }
   }
 
   async function confirmarReserva() {
@@ -115,7 +194,7 @@ export default function CatalogoPage() {
       }
 
       setResultado(salida);
-      setSeleccionado(null);
+      limpiarSeleccion();
       disponibilidad.recargar();
       await misReservas.recargar();
     } catch (e) {
@@ -133,6 +212,25 @@ export default function CatalogoPage() {
           Consulta los bloques horarios disponibles y reserva en cuatro pasos.
         </p>
       </header>
+
+      {urlPideBloqueNoDisponible ? (
+        <Alerta tono="aviso" titulo="Ese bloque ya no está disponible">
+          Mientras iniciabas sesión se ocupó o pasó su horario. Elige otro de
+          la lista, o pide que te avisemos si se libera un cupo.
+        </Alerta>
+      ) : null}
+
+      {mensajeAviso ? (
+        <Alerta tono="exito" onCerrar={() => setMensajeAviso(null)}>
+          {mensajeAviso}
+        </Alerta>
+      ) : null}
+
+      {errorAviso ? (
+        <Alerta tono="error" titulo="No pudimos gestionar el aviso" onCerrar={() => setErrorAviso(null)}>
+          {errorAviso}
+        </Alerta>
+      ) : null}
 
       <PasosReserva pasoActual={paso} />
 
@@ -398,6 +496,19 @@ export default function CatalogoPage() {
                           {perfil ? "Reservar" : "Ingresar para reservar"}
                         </Boton>
 
+                        {bloque.agotado && !bloque.iniciado && !yaReservado ? (
+                          <Boton
+                            variante="secundario"
+                            tamano="pequeno"
+                            cargando={avisoEnCurso === bloque.bloqueId}
+                            onClick={() => void alternarAviso(bloque)}
+                          >
+                            {avisos.includes(bloque.bloqueId)
+                              ? "No avisarme"
+                              : "Avísame si se libera"}
+                          </Boton>
+                        ) : null}
+
                         {!veredicto.permitido ? (
                           <p
                             id={`motivo-${bloque.bloqueId}`}
@@ -422,7 +533,7 @@ export default function CatalogoPage() {
         titulo="Confirmar reserva"
         descripcion="Revisa los datos antes de confirmar."
         onCerrar={() => {
-          setSeleccionado(null);
+          limpiarSeleccion();
           setErrorReserva(null);
         }}
         acciones={
@@ -430,7 +541,7 @@ export default function CatalogoPage() {
             <Boton
               variante="secundario"
               onClick={() => {
-                setSeleccionado(null);
+                limpiarSeleccion();
                 setErrorReserva(null);
               }}
               disabled={confirmando}

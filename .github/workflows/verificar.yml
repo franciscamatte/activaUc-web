@@ -1,0 +1,118 @@
+# =====================================================================
+# ActivaUC · verificación automática antes de integrar
+# ---------------------------------------------------------------------
+# El documento de requerimientos (§10) pide que el linter y las pruebas
+# automatizadas se ejecuten **antes de integrar cambios a la rama
+# principal**. Eso no se cumple con que existan los comandos: tiene que
+# correrlos algo que no dependa de que una persona se acuerde.
+#
+# Dos trabajos en paralelo:
+#
+#   · `cliente`  · lint, typecheck, 245 pruebas con Vitest y build.
+#   · `base`     · las 10 suites SQL contra un PostgreSQL de verdad,
+#                  aplicando las migraciones en orden sobre una base
+#                  vacía. Eso verifica además que `supabase db push`
+#                  funcionaría en un entorno nuevo.
+#
+# Para que esto bloquee de verdad la integración hay que marcar los dos
+# trabajos como obligatorios en GitHub:
+#   Settings → Branches → Add branch protection rule → main
+#   → Require status checks to pass → cliente, base
+# Sin esa regla, el resultado se ve pero no impide fusionar.
+# =====================================================================
+
+name: Verificación
+
+on:
+  push:
+    branches: [main, Avance]
+  pull_request:
+    branches: [main]
+
+# Un empujón nuevo cancela la verificación en curso de la misma rama:
+# el resultado del commit anterior ya no interesa.
+concurrency:
+  group: verificar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cliente:
+    name: Cliente (lint, tipos, pruebas, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # package.json exige >=20.19. Se fija en lugar de confiar en
+          # el valor por omisión del runner, que cambia con el tiempo.
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Linter
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas unitarias y de integración
+        run: npm run test
+
+      - name: Contraste con la documentación
+        # Las cifras de los documentos se desactualizan sin que nada
+        # falle. Esto lo convierte en un fallo visible.
+        run: npm run auditar-docs
+
+      - name: Compilación
+        # Vite incrusta las variables VITE_* al compilar, y
+        # scripts/verificar-entorno.mjs falla si no están. Aquí se usan
+        # valores de relleno con la forma correcta: la compilación no
+        # habla con Supabase, sólo necesita que existan y sean válidos.
+        # La clave es un JWT sin firma válida y con rol anon; no sirve
+        # para nada fuera de este paso.
+        env:
+          VITE_DATA_MODE: supabase
+          VITE_SUPABASE_URL: https://integracion-continua.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImludGVncmFjaW9uLWNvbnRpbnVhIiwicm9sZSI6ImFub24iLCJpYXQiOjAsImV4cCI6OTk5OTk5OTk5OX0.firma-no-valida-solo-para-compilar
+        run: npm run build
+
+  base:
+    name: Base de datos (migraciones y suites SQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        # Sin esto el trabajo arranca antes de que PostgreSQL acepte
+        # conexiones y la primera migración falla por carrera.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Suites SQL contra PostgreSQL real
+        env:
+          ACTIVAUC_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npm run test:db
+
+      - name: Concurrencia (sin sobrecupo con 100 solicitudes)
+        env:
+          ACTIVAUC_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npm run test:concurrency

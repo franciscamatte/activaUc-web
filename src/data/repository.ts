@@ -11,6 +11,7 @@
  */
 
 import type {
+  AdministradorListado,
   Bloque,
   ConexionCalendario,
   Disponibilidad,
@@ -19,6 +20,7 @@ import type {
   IncidenciaIntegracion,
   Perfil,
   Recinto,
+  RecintoAsignable,
   Reserva,
   ReservaAdmin,
   ResultadoCancelacion,
@@ -157,6 +159,31 @@ export interface ActivaRepository {
   listarMisReservas(): Promise<Reserva[]>;
   crearReserva(bloqueId: string, idSolicitud?: string): Promise<ResultadoReserva>;
   cancelarReserva(reservaId: string, motivo?: string): Promise<ResultadoCancelacion>;
+
+  // --- Aviso de cupo liberado ---------------------------------------
+  /**
+   * Pide aviso si se libera un cupo en un bloque lleno.
+   *
+   * El aviso NO reserva ni asegura el cupo: cuando llega, la persona
+   * reserva por el flujo normal y lo toma quien reserve primero.
+   */
+  solicitarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }>;
+  cancelarAvisoDeCupo(bloqueId: string): Promise<{ ok: boolean; mensaje: string }>;
+  /** Ids de los bloques cuyo aviso está pendiente para esta persona. */
+  listarAvisosDeCupo(): Promise<string[]>;
+
+  // --- Administrador general (REQ-29) -------------------------------
+  /**
+   * Las cuatro operaciones del administrador general. El backend vuelve
+   * a comprobar el rol en cada una: estar en el panel no autoriza nada.
+   */
+  listarAdministradores(): Promise<AdministradorListado[]>;
+  listarRecintosAsignables(): Promise<RecintoAsignable[]>;
+  asignarAdministrador(
+    correo: string,
+    recintoIds: string[],
+  ): Promise<{ ok: boolean; mensaje: string }>;
+  quitarAdministrador(correo: string): Promise<{ ok: boolean; mensaje: string }>;
 
   // --- Google Calendar ----------------------------------------------
   obtenerConexionCalendario(): Promise<ConexionCalendario>;

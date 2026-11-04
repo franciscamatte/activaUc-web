@@ -18,10 +18,17 @@
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --recinto "Cancha de fútbol San Joaquín"
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --listar
 #   bash scripts/seed-usuarios.sh --correo admin@uc.cl --quitar-admin
+#   bash scripts/seed-usuarios.sh --correo direccion@uc.cl --administrador-general
+#
+# El rol de administrador general sólo se concede por aquí, nunca desde
+# la aplicación: así una cuenta comprometida no puede crear más. Es el
+# arranque del sistema, y después ese administrador general concede el
+# rol de administrador de recintos desde el panel.
 # =====================================================================
 set -euo pipefail
 
 CORREO=""
+GENERAL=0
 RECINTO=""
 TODOS=0
 LISTAR=0
@@ -34,8 +41,9 @@ while [[ $# -gt 0 ]]; do
     --todos-los-recintos)   TODOS=1; shift ;;
     --listar)               LISTAR=1; shift ;;
     --quitar-admin)         QUITAR=1; shift ;;
+    --administrador-general) GENERAL=1; shift ;;
     -h|--help)
-      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Opción no reconocida: $1" >&2; exit 2 ;;
   esac
@@ -75,6 +83,52 @@ fi
 if [[ -z "$CORREO" ]]; then
   echo "Falta --correo. Usa --help para ver el uso." >&2
   exit 2
+fi
+
+# ---------------------------------------------------------------------
+# Administrador general
+# ---------------------------------------------------------------------
+# No necesita recintos: su alcance son todos los de la organización, y
+# no se expresa con asignaciones sino con el rol.
+if [[ "$GENERAL" -eq 1 ]]; then
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=on -v correo="$CORREO" <<'SQL'
+begin;
+
+select set_config('activauc.correo', :'correo', true);
+
+do $$
+declare
+  _correo text := current_setting('activauc.correo');
+  _uid    uuid;
+begin
+  select id into _uid from auth.users where lower(email) = lower(_correo);
+
+  if _uid is null then
+    raise exception 'No existe un usuario con el correo %. Que cree su cuenta primero.', _correo;
+  end if;
+
+  if not exists (select 1 from public.profiles where id = _uid) then
+    raise exception 'El usuario % existe en auth.users pero no tiene perfil.', _correo;
+  end if;
+
+  update public.profiles set role = 'administrador_general' where id = _uid;
+
+  -- Sus asignaciones previas, si las tuviera, dejan de significar algo:
+  -- se retiran para que el listado del panel no las muestre como si
+  -- limitaran su alcance.
+  delete from public.facility_admin_assignments where admin_id = _uid;
+
+  raise notice 'Rol de administrador general asignado a %.', _correo;
+end;
+$$;
+
+commit;
+SQL
+
+  echo ""
+  echo "Listo. Esa cuenta ya puede conceder el rol de administrador de"
+  echo "recintos desde el panel, en la pestaña «Administradores»."
+  exit 0
 fi
 
 # ---------------------------------------------------------------------

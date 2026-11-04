@@ -7,6 +7,7 @@ import BloquesSeccion from "./admin/BloquesSeccion";
 import ReservasSeccion from "./admin/ReservasSeccion";
 import IntegracionesSeccion from "./admin/IntegracionesSeccion";
 import AuditoriaSeccion from "./admin/AuditoriaSeccion";
+import AdministradoresSeccion from "./admin/AdministradoresSeccion";
 import { Cargando, ErrorConReintento } from "../components/ui/Estados";
 
 const SECCIONES = [
@@ -15,6 +16,9 @@ const SECCIONES = [
   { id: "reservas", titulo: "Reservas" },
   { id: "integraciones", titulo: "Integraciones" },
   { id: "auditoria", titulo: "Auditoría" },
+  // Sólo para el administrador general (REQ-29). Se filtra más abajo en
+  // lugar de ocultar la pestaña por CSS, para que no exista.
+  { id: "administradores", titulo: "Administradores", soloGeneral: true },
 ] as const;
 
 type SeccionId = (typeof SECCIONES)[number]["id"];
@@ -30,6 +34,11 @@ type SeccionId = (typeof SECCIONES)[number]["id"];
 export default function AdminPage() {
   const { repositorio, perfil } = useAuth();
   const [seccion, setSeccion] = useState<SeccionId>("recintos");
+
+  const esGeneral = perfil?.rol === "administrador_general";
+  const seccionesVisibles = SECCIONES.filter(
+    (s) => !("soloGeneral" in s && s.soloGeneral) || esGeneral,
+  );
 
   const cargarRecintos = useCallback(
     () => (repositorio ? repositorio.listarRecintosAsignados() : Promise.resolve([])),
@@ -67,7 +76,7 @@ export default function AdminPage() {
 
       <div className="overflow-x-auto border-b border-slate-200">
         <div role="tablist" aria-label="Secciones del panel" className="flex">
-          {SECCIONES.map((item) => (
+          {seccionesVisibles.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -105,9 +114,11 @@ export default function AdminPage() {
           <ReservasSeccion repositorio={repositorio} recintos={listaRecintos} />
         ) : seccion === "integraciones" ? (
           <IntegracionesSeccion repositorio={repositorio} />
-        ) : (
+        ) : seccion === "auditoria" ? (
           <AuditoriaSeccion repositorio={repositorio} recintos={listaRecintos} />
-        )}
+        ) : esGeneral ? (
+          <AdministradoresSeccion repositorio={repositorio} />
+        ) : null}
       </div>
     </section>
   );

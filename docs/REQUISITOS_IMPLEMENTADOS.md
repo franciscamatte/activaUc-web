@@ -35,7 +35,7 @@ respaldo no cuenta.
 | REQ-8 | Listado de recintos con descripción, capacidad y horario | Implementado | Vista `public.block_availability`; `CatalogoPage` | `mockRepository.test.ts` › «lista recintos activos» |
 | REQ-9 | Cupos actualizados en tiempo real | Implementado | Supabase Realtime sobre `reservations`, `time_blocks` y `facilities` (`20261016000400_realtime_and_cron.sql`, `useDisponibilidad.ts`), con respaldo por intervalo de 45 s y refresco al recuperar foco o conexión | `20_reservations.sql` comprueba los conteos de la vista; el indicador «Actualización en vivo activa» refleja el estado real |
 | REQ-10 | Filtros por fecha, tipo de recinto y bloque horario, específicos o por rango | Implementado | `CatalogoPage` (6 filtros: fecha desde/hasta, tipo, recinto, hora desde/hasta, sólo con cupos). Fecha, tipo y recinto se filtran en PostgreSQL; el rango horario en el cliente, por la zona de presentación | `reservationRules.test.ts` › `dentroDelRangoHorario` (6 casos, incluye zona horaria), `mockRepository.test.ts` › «disponibilidad y filtros» |
-| REQ-11 | Indicar explícitamente los bloques sin cupos e impedir su selección | Implementado | `block_availability.is_full`; `InsigniaCupos` muestra «Sin cupos»; el botón queda deshabilitado con el motivo asociado por `aria-describedby`. El backend **vuelve a rechazar** con `error: "sin_cupos"` | `20_reservations.sql` › «capacidad, duplicados y agotamiento`; `reservationRules.test.ts` › `puedeReservarBloque` |
+| REQ-11 | Bloques sin disponibilidad | Implementado | La vista `block_availability` expone `is_full`, el catálogo lo marca y el botón de reservar queda deshabilitado. Desde la solicitud de cambio 2, un bloque lleno ofrece además pedir aviso si se libera un cupo | `20_reservations.sql` › «agotamiento con fallo limpio»; `95_aviso_cupo_liberado.sql` |
 
 ---
 
@@ -104,7 +104,7 @@ solicitud (igual que PostgREST en Supabase):
 | Req | Descripción | Estado | Dónde está | Verificación |
 |---|---|---|---|---|
 | REQ-28 | Crear, actualizar y eliminar los recintos a cargo | Implementado | `admin_create_facility()` (crea y autoasigna de forma atómica); edición por RLS. La baja es **lógica** (`active = false`) para preservar el historial de reservas | `40_rls.sql` › «no puede editar un recinto ajeno»; `mockRepository.test.ts` › «administración» |
-| REQ-29 | Asociar cada administrador a uno o más recintos y restringir su gestión | Implementado | `facility_admin_assignments` + `is_facility_admin()` en todas las políticas y funciones de administración | `40_rls.sql` › «el administrador modificó un recinto que no administra» (debe fallar); `30_cancellations.sql` › «un administrador no asignado pudo intentar cancelar» (debe fallar) |
+| REQ-29 | Asignación de administradores a recintos | Implementado | `facility_admin_assignments` acota a cada administrador a sus recintos, y `is_facility_admin` es el único punto por el que pasan todas las políticas RLS y las funciones del panel. El rol `administrador_general` lo gestiona desde la pestaña «Administradores»: concede el rol de administrador de recintos a una cuenta existente y le asigna recintos (`admin_general_asignar_administrador`), o se lo retira. Su propio rol **no** se concede desde la aplicación —sólo con `seed-usuarios.sh --administrador-general`— para que una cuenta comprometida no pueda crear más | `90_administrador_general.sql` (5 escenarios, la mitad comprobando lo que **no** puede hacer); `mockRepository.test.ts` › «administrador general (REQ-29)» (6 casos) |
 | REQ-30 | Definir y modificar bloques horarios y la capacidad máxima | Implementado | `BloquesSeccion` para el bloque suelto y `SerieBloquesForm` para publicar una temporada entera: `admin_create_block_series` acepta un rango de fechas, varias horas de inicio y días de la semana, interpreta las horas en hora local de Santiago, exige una vista previa antes de escribir y es idempotente (repetirla no duplica); `admin_deactivate_block_series` retira la serie sin cancelar las reservas confirmadas y las informa. Privilegios de columna + RLS sobre `time_blocks`; índice único que impide dos bloques activos con el mismo inicio en un recinto | `60_block_series.sql` (10 escenarios, incluidos hora local, idempotencia y omisión del pasado); `40_rls.sql`; `reservationRules.test.ts` › `validarBloqueHorario` (6 casos) |
 | REQ-31 | Consultar reservas vigentes e históricas por recinto | Implementado | `admin_list_reservations(facility_id, scope)`. Devuelve el **nombre** de quien reservó, nunca su correo ni su teléfono | `40_rls.sql` › «admin_list_reservations expone datos personales» (debe fallar) |
 | REQ-32 | Cancelar reservas de sus recintos, liberando el cupo y notificando | Implementado | `cancel_reservation()` por la vía de administrador: sin ventana de 2 horas, con motivo obligatoriamente registrado en auditoría | `30_cancellations.sql` › «cancelación administrativa y aviso por WhatsApp» |
@@ -151,7 +151,7 @@ solicitud (igual que PostgREST en Supabase):
 | Guía de uso para usuarios y administradores | `docs/GUIA_USUARIO.md`, `docs/GUIA_ADMINISTRADOR.md` |
 | Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) y por una prueba equivalente sobre las plantillas de WhatsApp |
 | Linter configurado en el repositorio | ESLint con configuración plana sobre `src/`, `supabase/functions/` y `scripts/`. **La configuración anterior sólo declaraba `files: ["**/*.js"]`, por lo que no revisaba ningún archivo del proyecto**; se corrigió |
-| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 233 pruebas con Vitest + 8 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
+| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 256 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
 
 ---
 
@@ -203,3 +203,68 @@ Declaradas de forma explícita, sin presentarlas como resueltas:
    interfaz requeriría `@testing-library/react` y un DOM simulado; se omitió
    deliberadamente para no inflar las dependencias con pruebas de menor valor
    que las de concurrencia y RLS.
+
+---
+
+## Solicitudes de cambio aceptadas
+
+Dos solicitudes posteriores al documento de requerimientos. No llevan
+número de REQ porque el cliente no se lo dio; se listan aquí con la
+misma exigencia de evidencia que el resto.
+
+### SC-1 · Consulta pública de disponibilidad
+
+**Qué pide.** Que cualquier persona vea recintos, bloques y cupos sin
+iniciar sesión. El registro se pide recién al pulsar «reservar», y
+después de entrar se vuelve al bloque que había elegido.
+
+**Estado: implementado.**
+
+La consulta pública ya existía: `block_availability` sólo expone
+agregados —sin un solo dato personal— y `anon` tiene permiso de lectura
+sobre ella, de modo que el catálogo y los filtros funcionan sin cuenta.
+Lo que faltaba era la vuelta al bloque: el botón llevaba a `/login` con
+destino al catálogo genérico y la persona tenía que buscar su bloque otra
+vez.
+
+Ahora el identificador del bloque viaja en el destino
+(`/catalogo?bloque=<id>`) y al volver se abre directamente su
+confirmación. Si en ese intervalo el bloque se ocupó o pasó su horario,
+se dice explícitamente en lugar de abrir un diálogo que fallaría al
+confirmar.
+
+La selección se **deriva** de la URL en lugar de escribirse desde un
+efecto: así no hay un render intermedio con el diálogo cerrado.
+
+*Evidencia:* `block_availability` y los privilegios de `anon` en
+`40_rls.sql` › «disponibilidad pública sin datos personales».
+
+### SC-2 · Aviso cuando se libera un cupo
+
+**Qué pide.** Que en un bloque sin cupos se pueda pedir aviso si se
+libera uno. Al cancelar alguien, se avisa a quien lo pidió, que reserva
+por el flujo normal. El aviso no asegura el cupo.
+
+**Estado: implementado.**
+
+- `block_watchers` registra quién espera qué bloque. Una solicitud se
+  **consume** al avisarse, de modo que no se avisa indefinidamente a
+  quien ya perdió el interés.
+- Sólo se acepta sobre bloques llenos, futuros y en los que la persona no
+  tenga ya reserva. Con cupo libre se responde que puede reservar.
+- Un disparador por sentencia sobre `reservations` detecta las
+  cancelaciones y encola el aviso, pero **sólo si la cancelación dejó
+  cupo real**: dos cancelaciones simultáneas no avisan dos veces por el
+  mismo hueco.
+- El aviso sale por cada canal que la persona haya consentido, así que la
+  elección entre WhatsApp y correo es la que ya hizo en «Datos
+  personales» y no una decisión fija del sistema.
+- El texto dice explícitamente que el cupo **todavía no es suyo**:
+  prometer lo contrario sería engañoso, y el cupo lo toma quien reserve
+  primero.
+- Sin ningún canal consentido la solicitud se consume igualmente: dejarla
+  pendiente la haría reaparecer en cada cancelación futura.
+
+*Evidencia:* `95_aviso_cupo_liberado.sql` (5 escenarios, incluidos el de
+no avisar dos veces y el de consumir la solicitud sin canal);
+`mockRepository.test.ts` › «aviso de cupo liberado» (5 casos).

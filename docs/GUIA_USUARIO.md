@@ -2,20 +2,30 @@
 
 Cómo reservar espacios deportivos de Deportes UC.
 
+**No necesitas cuenta para mirar.** El catálogo, los horarios y los cupos
+disponibles se ven sin iniciar sesión. La cuenta se pide recién cuando
+pulsas «Reservar», y al volver de entrar te deja en el mismo bloque que
+habías elegido.
+
 ---
 
 ## Crear tu cuenta
 
 1. Entra a ActivaUC y pulsa **Crear cuenta**.
 2. Completa tu nombre, tu correo y una contraseña de al menos 8 caracteres.
-3. Te enviamos un correo con un enlace de confirmación. **Debes abrirlo** para
-   poder iniciar sesión.
-4. Si no llega en unos minutos, revisa la carpeta de correo no deseado. También
-   puedes reenviarlo desde la pantalla que aparece después del registro.
+3. Te enviamos un correo con un **código** de verificación. Escríbelo en la
+   pantalla que aparece y tu cuenta queda activa.
+4. Si no llega en unos minutos, revisa la carpeta de correo no deseado. Desde
+   esa misma pantalla puedes pedir otro código.
+
+> Es un código y no un enlace a propósito. Los correos institucionales como
+> `@uc.cl` pasan los enlaces por un revisor automático que los abre antes que
+> tú, y un enlace de un solo uso queda gastado. Un código no se gasta por
+> abrirlo.
 
 Si olvidas tu contraseña, pulsa **Olvidé mi contraseña** en la pantalla de
-ingreso: recibirás un enlace para crear una nueva. El enlace caduca en una hora
-y sólo sirve una vez.
+ingreso: recibirás un código para crear una nueva. Caduca en una hora y sólo
+sirve una vez.
 
 ---
 
@@ -52,6 +62,22 @@ se indica si la actualización en vivo está activa.
 
 Si ya tienes una reserva en ese bloque, la tarjeta lo dice: **«Ya reservado por
 ti»**.
+
+#### Si el bloque está lleno: «Avísame si se libera»
+
+Un bloque sin cupos muestra ese botón. Al pulsarlo quedas anotado, y si
+alguien cancela te llegará un aviso por las vías que tengas activadas en
+«Datos personales» —WhatsApp, correo o ambas—.
+
+Dos cosas importantes:
+
+- **El aviso no te reserva el cupo.** Te avisa de que quedó libre, y lo toma
+  quien reserve primero. Conviene entrar pronto.
+- **Es un aviso, no una suscripción.** Después de avisarte, la anotación se
+  consume. Si quieres que te avisen otra vez, vuelve a pulsar el botón.
+
+Puedes deshacerlo en cualquier momento con **«No avisarme»**. Y si ya tienes
+reserva en ese bloque, el botón no aparece: no tendría sentido.
 
 ### Paso 3 · Confirmar
 

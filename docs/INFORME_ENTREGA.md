@@ -170,7 +170,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 8 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 10 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
@@ -183,7 +183,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Líneas | Contenido |
 |---|---|---|
-| `20261016000100_core_schema.sql` | 532 | 8 enumeraciones, 13 tablas, índices, restricciones `CHECK`, disparadores de `updated_at`, alta automática de perfil, esquema `private` |
+| `20261016000100_core_schema.sql` | 532 | 8 enumeraciones, 13 de las 14 tablas —`block_watchers` la añade la migración 10—, índices, restricciones `CHECK`, disparadores de `updated_at`, alta automática de perfil, esquema `private` |
 | `20261016000200_functions.sql` | 1352 | 2 vistas y 19 funciones: transacciones de reserva y cancelación, colas, límite de uso, administración, webhooks |
 | `20261016000300_rls_policies.sql` | 287 | `REVOKE ALL` y concesiones por columna, 20 políticas RLS, barrera anti-escalada de privilegios |
 | `20261016000400_realtime_and_cron.sql` | 158 | Publicación de Realtime, configuración operativa, disparador de tareas, vista de salud, limpieza |
@@ -191,11 +191,14 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261016000600_despacho_inmediato.sql` | 117 | Cuatro disparadores por sentencia que invocan el worker en cuanto se encola un trabajo listo, para no esperar al ciclo de `pg_cron` |
 | `20261016000700_despacho_respeta_backoff.sql` | 62 | Iguala la condición del disparador a la del reclamo, para no despachar un trabajo que aún está en su retroceso |
 | `20261016000800_canal_correo.sql` | 844 | Segundo canal de notificación: consentimiento de correo independiente, `channel` abierto a `email`, encolado por canal y reclamo que resuelve el destino de cada uno |
+| `20261104000900_administrador_general.sql` | 583 | Rol `administrador_general` (REQ-29): amplía `is_admin` e `is_facility_admin`, abre la barrera anti-escalada sólo para la vía sancionada, y añade las funciones de asignar, retirar y listar administradores |
+| `20261104001000_aviso_cupo_liberado.sql` | 388 | Aviso de cupo liberado (SC-2): tabla `block_watchers`, tipo de notificación `cupo_liberado`, `block_id` en la cola, disparador por sentencia sobre las cancelaciones y reclamo que resuelve el horario desde el bloque |
 
-Las 13 tablas: `profiles`, `facilities`, `time_blocks`,
+Las 14 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
 `calendar_connections`, `calendar_sync_jobs`, `whatsapp_messages`,
-`notification_jobs`, `webhook_events`, `oauth_states`, `rate_limit_counters`.
+`notification_jobs`, `webhook_events`, `oauth_states`,
+`rate_limit_counters` y `block_watchers`.
 
 Además, `supabase/cron/schedule.sql` queda **fuera** de las migraciones a
 propósito: necesita la URL de las funciones y el `CRON_SECRET`, que son
@@ -322,7 +325,7 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  233 passed (233)
+     Tests  256 passed (256)
 ```
 
 | Archivo | Pruebas |
@@ -343,8 +346,10 @@ Test Files  8 passed (8)
 ✔ 20_reservations.sql  ✔ 40_rls.sql             ✔ 60_block_series.sql
                                                 ✔ 70_despacho_inmediato.sql
                                                 ✔ 80_canal_correo.sql
+                                                ✔ 90_administrador_general.sql
+                                                ✔ 95_aviso_cupo_liberado.sql
 
-✔ 8 archivos de prueba superados
+✔ 10 archivos de prueba superados
 ```
 
 Cada archivo corre en su propia transacción, que se revierte. El arranque
@@ -369,6 +374,29 @@ apliquen limpiamente sobre una base vacía.
 
 Cada solicitud usa su propia conexión y transacción, con los claims del JWT
 fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
+
+---
+
+### Integración continua
+
+`.github/workflows/verificar.yml` ejecuta en cada `push` a `main` o
+`Avance` y en cada *pull request* hacia `main`:
+
+| Trabajo | Qué corre |
+|---|---|
+| `cliente` | `lint`, `typecheck`, 256 pruebas de Vitest y `build` |
+| `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
+
+Con esto queda cubierto el requisito de § 10 del documento de
+requerimientos: el linter y las pruebas se ejecutan sin depender de que
+alguien se acuerde. El trabajo `base` aplica además las migraciones sobre
+una base vacía, de modo que verifica que `supabase db push` funcionaría
+en un entorno nuevo.
+
+**Queda un paso en GitHub, no en el repositorio**: marcar los dos
+trabajos como obligatorios en la protección de la rama `main`. Sin eso
+el resultado se ve pero no impide fusionar, y el requisito dice «antes de
+integrar».
 
 ---
 
@@ -498,10 +526,12 @@ local y no se suben.
 
 Lo único que falta. No hay código pendiente.
 
-Dos de estos pasos son los que con más frecuencia se dan por hechos y no lo
-están: el **7**, porque sin él los correos siguen llevando el enlace que el
-riesgo 11 de § 12 describe, y el **8**, porque el límite del servicio
-incorporado de Supabase deja a casi todo el mundo sin poder registrarse.
+Tres de estos pasos son los que con más frecuencia se dan por hechos y no
+lo están: el **7**, porque sin él los correos siguen llevando el enlace que
+el riesgo 11 de § 12 describe; el **8**, porque el límite del servicio
+incorporado de Supabase deja a casi todo el mundo sin poder registrarse; y
+el **12**, porque una verificación que no bloquea no cumple lo que pide el
+requisito.
 
 | Paso | Qué hay que hacer | Documento |
 |---|---|---|
@@ -515,6 +545,8 @@ incorporado de Supabase deja a casi todo el mundo sin poder registrarse.
 | 8 | Configurar SMTP propio. No es opcional si va a usarlo más de un puñado de personas: el servicio incorporado de Supabase ronda los 2 correos por hora | [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 3 |
 | 9 | Apuntar el dominio al alojamiento elegido | [COMPARTIR.md](COMPARTIR.md) § 2.3 o [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 5 |
 | 10 | Dar de alta los recintos, bloques y administradores reales. Para una temporada completa, la publicación en serie del panel | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
+| 11 | **Crear el primer administrador general**: la persona se registra normalmente y después `bash scripts/seed-usuarios.sh --correo <su correo> --administrador-general`. Ese rol no se concede desde la aplicación a propósito, para que una cuenta comprometida no pueda crear más | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
+| 12 | **Marcar la verificación como obligatoria** en GitHub: Settings → Branches → regla para `main` → Require status checks → `cliente` y `base`. Sin esto la integración continua informa pero no impide fusionar, y § 10 del documento de requerimientos pide que sea antes de integrar | [PRUEBAS.md](PRUEBAS.md) |
 
 ---
 

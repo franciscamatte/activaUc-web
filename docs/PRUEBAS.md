@@ -21,7 +21,7 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**233 pruebas en 8 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**256 pruebas en 9 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
@@ -92,7 +92,7 @@ fallar con un error de conexión en bruto.
    Supabase: esquema `auth`, `auth.uid()`, y los roles `anon`,
    `authenticated` y `service_role` (este último con `BYPASSRLS`, igual que en
    Supabase).
-3. Aplica las ocho migraciones **en el mismo orden que la CLI**.
+3. Aplica las diez migraciones **en el mismo orden que la CLI**.
 4. Ejecuta cada archivo de prueba en su propia transacción, que **revierte** al
    terminar: las pruebas no se contaminan entre sí.
 5. Elimina la base.
@@ -104,7 +104,7 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 
 | Archivo | Qué verifica |
 |---|---|
-| `10_schema.sql` | Las 13 tablas; RLS activa en todas; índice único de duplicados; disparadores de `updated_at`; que **toda** función `SECURITY DEFINER` fije `search_path`; restricciones de datos personales; **que ninguna función de `public` sea ejecutable por `anon`**; que las columnas de tokens no sean legibles; alta automática de perfil |
+| `10_schema.sql` | Las 14 tablas; RLS activa en todas; índice único de duplicados; disparadores de `updated_at`; que **toda** función `SECURITY DEFINER` fije `search_path`; restricciones de datos personales; **que ninguna función de `public` sea ejecutable por `anon`**; que las columnas de tokens no sean legibles; alta automática de perfil |
 | `20_reservations.sql` | Capacidad, duplicados, agotamiento con fallo limpio; bloques pasados, inactivos y de recintos inactivos; **regla exacta del recordatorio de 2 h**; idempotencia de la cola de Calendar; límite de solicitudes por usuario |
 | `30_cancellations.sql` | Ventana de 2 h; cancelación de reserva ajena (debe fallar); reserva iniciada y vencida; idempotencia de cancelar dos veces; administrador no asignado (debe fallar); administrador asignado sin ventana; aviso por WhatsApp; cupo liberado disponible al instante; encolado de eliminación de eventos en sus dos casos |
 | `40_rls.sql` | Con los roles `anon` y `authenticated` **reales**: disponibilidad pública sin datos personales; aislamiento de perfiles y reservas; imposibilidad de escribir en `reservations`; imposibilidad de escalar el rol; tokens OAuth inaccesibles; administrador acotado a sus recintos; colas y webhooks reservados al backend; y una comprobación final de que ningún intento de escritura cruzada surtió efecto |
@@ -112,6 +112,8 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 | `60_block_series.sql` | Creación de series (REQ-30): autorización sólo al administrador asignado; validaciones que rechazan antes de escribir; vista previa que cuenta sin escribir; serie diaria y por días de la semana **en hora local de Santiago**; repetir la serie no duplica; extender respeta lo publicado; bloques en el pasado omitidos sin fallar; desactivación en serie que conserva las reservas confirmadas |
 | `70_despacho_inmediato.sql` | Los cuatro disparadores de despacho existen y son **por sentencia**; reservar y cancelar siguen funcionando con ellos puestos; y, lo que importa, **un fallo del despacho no impide reservar**: el trabajo queda encolado para que lo recoja el cron |
 | `80_canal_correo.sql` | El canal de correo no se cruza con WhatsApp: consentimientos independientes (el correo no exige teléfono); con un solo canal consentido no se encola el otro; con ambos, **dos trabajos por aviso** con claves de idempotencia distintas y la de WhatsApp conservando su prefijo histórico; revocar un canal descarta lo suyo y **no toca** lo del otro; el reclamo resuelve el destino de cada canal y la bitácora guarda sólo el dominio del correo; canal y destino restringidos por `check` |
+| `90_administrador_general.sql` | El rol de administrador general (REQ-29): que sólo él asigne administradores, que un usuario común y un administrador de recintos no puedan; que **no** pueda cambiar su propio rol, degradar a otro general ni conceder el rol general —ni por la función ni por una escritura directa—; que un recinto inexistente se informe sin dejar el rol a medias; que alcance recintos que no tiene asignados y pueda cancelar sin la ventana de 2 h; y que el listado esté acotado a él |
+| `95_aviso_cupo_liberado.sql` | El aviso de cupo (SC-2): que sólo se pida sobre bloques llenos, futuros y sin reserva propia; que una cancelación avise a quien esperaba, encolando con `block_id` y sin reserva; que **no** avise dos veces, ni por una segunda cancelación ni por una actualización posterior; que sin canal consentido la solicitud se consuma igual para no reaparecer; y que cada persona gestione sólo las suyas |
 
 Las aserciones usan el `ASSERT` de PL/pgSQL: si una condición falla, la
 sentencia lanza y el script reporta el archivo y el mensaje exactos.
@@ -120,7 +122,7 @@ sentencia lanza y el script reporta el archivo y el mensaje exactos.
 
 ```
 ✔ 10_schema.sql
-    OK · las 13 tablas de dominio existen
+    OK · las 14 tablas de dominio existen
     OK · RLS activa en todas las tablas de public
     OK · índices y disparadores presentes
     OK · todas las funciones SECURITY DEFINER fijan search_path
@@ -135,8 +137,10 @@ sentencia lanza y el script reporta el archivo y el mensaje exactos.
 ✔ 60_block_series.sql
 ✔ 70_despacho_inmediato.sql
 ✔ 80_canal_correo.sql
+✔ 90_administrador_general.sql
+✔ 95_aviso_cupo_liberado.sql
 
-✔ 8 archivos de prueba superados
+✔ 10 archivos de prueba superados
 ```
 
 ---
@@ -318,3 +322,53 @@ Simula `fetch` con `vi.stubGlobal` y verifica **lo que se envía** y **cómo se
 interpreta cada respuesta**, incluidos los errores. Lo valioso está en los
 casos límite: el `409` de Google, el `63003` de Twilio, la firma inválida. Ver
 `src/test/googleCalendar.test.ts` como referencia.
+
+---
+
+## Contraste con la documentación
+
+```bash
+node scripts/auditar-documentos.mjs
+```
+
+Compara lo que los documentos afirman con lo que existe: número de
+migraciones, suites, tablas, enumeraciones y documentos, y comprueba que
+las migraciones, suites y scripts citados existan de verdad.
+
+Existe porque esas cifras se desactualizan sin que nada falle —nadie
+recuerda que al añadir una migración hay que corregir «ocho migraciones»
+en tres sitios— y porque un documento con números inventados es peor que
+no tenerlo. En su primera ejecución encontró siete descuadres.
+
+---
+
+## Integración continua
+
+El documento de requerimientos (§10) pide que el linter y las pruebas se
+ejecuten **antes de integrar cambios a la rama principal**. Que existan
+los comandos no basta: tiene que correrlos algo que no dependa de que
+alguien se acuerde.
+
+`.github/workflows/verificar.yml` lo hace en cada `push` a `main` o
+`Avance` y en cada *pull request* hacia `main`, con dos trabajos en
+paralelo:
+
+| Trabajo | Qué corre |
+|---|---|
+| `cliente` | `lint`, `typecheck`, las 256 pruebas de Vitest y `build` |
+| `base` | las 10 suites SQL y la prueba de concurrencia contra un PostgreSQL 16 real |
+
+El trabajo `base` aplica las migraciones en orden sobre una base vacía,
+así que verifica además que `supabase db push` funcionaría en un entorno
+nuevo.
+
+Para la compilación en CI se usan valores de relleno con la forma
+correcta —la clave es un JWT sin firma válida y con rol `anon`— porque
+`scripts/verificar-entorno.mjs` exige que existan y compilar no habla
+con Supabase.
+
+> **Falta un paso que se hace en GitHub, no en el repositorio.** Para que
+> esto *impida* integrar y no sólo informe:
+> Settings → Branches → Add branch protection rule → `main` → Require
+> status checks to pass → marcar `cliente` y `base`. Sin esa regla el
+> resultado se ve pero no bloquea.

@@ -40,6 +40,7 @@ const DEFAULT_BATCH = 10;
 interface ClaimedJob {
   job_id: string;
   reservation_id: string | null;
+  block_id: string | null;
   user_id: string;
   kind: NotificationKind;
   channel: "whatsapp" | "email";

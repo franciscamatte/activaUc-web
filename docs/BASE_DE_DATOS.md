@@ -1,6 +1,6 @@
 # Cómo funciona la base de datos
 
-El esquema son 13 tablas, 2 vistas y 8 enumeraciones. Este documento
+El esquema son 14 tablas, 2 vistas y 8 enumeraciones. Este documento
 explica dónde vive cada cosa y, sobre todo, las decisiones de diseño que
 no se deducen mirando el esquema.
 
@@ -33,6 +33,21 @@ interfaz, bastaría abrir la consola del navegador para saltarla.
 El correo y la contraseña **no** están aquí: viven en `auth.users`, que
 es de Supabase. `profiles` se crea sola cuando alguien se registra, por
 un disparador (`handle_new_user`).
+
+Hay tres roles. `usuario` reserva lo suyo. `administrador` gestiona los
+recintos que tenga en `facility_admin_assignments`.
+`administrador_general` gestiona todos los de la organización y concede
+el rol de administrador: su alcance no viene de asignaciones, viene del
+rol. Dos funciones concentran esa decisión —`is_admin` y
+`is_facility_admin`— y por ellas pasan todas las políticas RLS y todas
+las funciones del panel, de modo que el alcance se define en un solo
+sitio.
+
+El rol `administrador_general` **no se concede desde la aplicación**:
+sólo con acceso directo a la base
+(`scripts/seed-usuarios.sh --administrador-general`). Si la aplicación
+pudiera concederlo, una cuenta comprometida podría crear más y no habría
+forma de acotar el daño desde fuera.
 
 ### Qué se puede reservar
 
@@ -70,6 +85,15 @@ administrador. Es lo que permite reconstruir qué ocurrió.
 | Tabla | Qué guarda |
 |---|---|
 | `rate_limit_counters` | Cuántas veces hizo cada persona cada cosa, por ventana de tiempo |
+
+### Avisos de cupo
+
+| Tabla | Qué guarda |
+|---|---|
+| `block_watchers` | Quién pidió aviso si se libera un cupo en un bloque lleno |
+
+Una solicitud se **consume** al avisarse. El aviso no reserva nada: lo
+toma quien reserve primero.
 
 ---
 
@@ -191,7 +215,7 @@ proceso murió a medias.
 
 | Archivo | Qué define |
 |---|---|
-| `supabase/migrations/…000100_core_schema.sql` | Las 13 tablas, 8 enumeraciones, índices y restricciones |
+| `supabase/migrations/…000100_core_schema.sql` | 13 de las 14 tablas, 8 enumeraciones, índices y restricciones |
 | `…000200_functions.sql` | Las funciones: reservar, cancelar, colas, administración |
 | `…000300_rls_policies.sql` | `REVOKE ALL`, privilegios por columna y las políticas RLS |
 | `…000400_realtime_and_cron.sql` | Realtime y las tareas programadas |

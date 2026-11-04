@@ -962,3 +962,154 @@ describe("formato del código de verificación", () => {
     expect(codigoTieneFormato("1234 5678")).toBe(true);
   });
 });
+
+describe("aviso de cupo liberado", () => {
+  // Solicitud de cambio: el aviso existe para los bloques llenos, no
+  // reserva nada, y es de quien lo pidió.
+  async function bloqueLleno(): Promise<string> {
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    const recinto = (await repo.listarRecintosAsignados())[0];
+    const inicio = new Date(Date.now() + 30 * 3_600_000);
+    inicio.setMinutes(0, 0, 0);
+
+    await repo.crearBloque({
+      recintoId: recinto.id,
+      inicio: inicio.toISOString(),
+      fin: new Date(inicio.getTime() + 3_600_000).toISOString(),
+      capacidadMaxima: 1,
+      activo: true,
+    });
+    const bloque = (await repo.listarBloques(recinto.id)).find(
+      (b) => b.inicio === inicio.toISOString(),
+    )!;
+
+    // El administrador ocupa el único cupo.
+    await repo.crearReserva(bloque.id);
+    return bloque.id;
+  }
+
+  it("rechaza el aviso cuando el bloque tiene cupos", async () => {
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    const recinto = (await repo.listarRecintosAsignados())[0];
+    const bloques = await repo.listarBloques(recinto.id);
+    const conCupo = bloques.find((b) => new Date(b.inicio).getTime() > Date.now())!;
+
+    const r = await repo.solicitarAvisoDeCupo(conCupo.id);
+
+    expect(r.ok).toBe(false);
+    expect(r.mensaje).toContain("tiene cupos");
+  });
+
+  it("acepta el aviso en un bloque lleno y lo lista", async () => {
+    const bloqueId = await bloqueLleno();
+
+    await repo.iniciarSesion(CORREO, CLAVE);
+    const r = await repo.solicitarAvisoDeCupo(bloqueId);
+
+    expect(r.ok).toBe(true);
+    expect(await repo.listarAvisosDeCupo()).toContain(bloqueId);
+  });
+
+  it("no acepta el aviso de quien ya reservó ese bloque", async () => {
+    const bloqueId = await bloqueLleno();
+
+    // El administrador es quien tomó el cupo.
+    const r = await repo.solicitarAvisoDeCupo(bloqueId);
+
+    expect(r.ok).toBe(false);
+    expect(r.mensaje).toContain("Ya tienes una reserva");
+  });
+
+  it("cancelar el aviso lo quita de la lista", async () => {
+    const bloqueId = await bloqueLleno();
+    await repo.iniciarSesion(CORREO, CLAVE);
+    await repo.solicitarAvisoDeCupo(bloqueId);
+
+    const r = await repo.cancelarAvisoDeCupo(bloqueId);
+
+    expect(r.ok).toBe(true);
+    expect(await repo.listarAvisosDeCupo()).not.toContain(bloqueId);
+  });
+
+  it("el aviso es de quien lo pidió y no se ve desde otra cuenta", async () => {
+    const bloqueId = await bloqueLleno();
+    await repo.iniciarSesion(CORREO, CLAVE);
+    await repo.solicitarAvisoDeCupo(bloqueId);
+
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+
+    expect(await repo.listarAvisosDeCupo()).not.toContain(bloqueId);
+  });
+});
+
+describe("administrador general (REQ-29)", () => {
+  const CORREO_GENERAL = "general@uc.cl";
+
+  it("sólo el administrador general gestiona administradores", async () => {
+    await repo.iniciarSesion(CORREO, CLAVE);
+    await expect(repo.listarAdministradores()).rejects.toThrow(/administrador general/i);
+
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    await expect(repo.listarAdministradores()).rejects.toThrow(/administrador general/i);
+
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    expect((await repo.listarAdministradores()).length).toBeGreaterThan(0);
+  });
+
+  it("concede el rol a una cuenta existente con sus recintos", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    const r = await repo.asignarAdministrador(CORREO, [recintos[0].id]);
+
+    expect(r.ok).toBe(true);
+    const lista = await repo.listarAdministradores();
+    const nuevo = lista.find((a) => a.correo === CORREO)!;
+    expect(nuevo.rol).toBe("administrador");
+    expect(nuevo.recintos).toContain(recintos[0].nombre);
+  });
+
+  it("no concede el rol a un correo sin cuenta", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    const r = await repo.asignarAdministrador("nadie@uc.cl", [recintos[0].id]);
+
+    expect(r.ok).toBe(false);
+    expect(r.mensaje).toContain("No existe una cuenta");
+  });
+
+  it("no puede cambiar su propio rol ni el de otro general", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    const propio = await repo.asignarAdministrador(CORREO_GENERAL, [recintos[0].id]);
+
+    expect(propio.ok).toBe(false);
+    expect(propio.mensaje).toContain("tu propio rol");
+  });
+
+  it("quitar el rol borra también las asignaciones", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+    await repo.asignarAdministrador(CORREO, [recintos[0].id]);
+
+    const r = await repo.quitarAdministrador(CORREO);
+
+    expect(r.ok).toBe(true);
+    const lista = await repo.listarAdministradores();
+    expect(lista.some((a) => a.correo === CORREO)).toBe(false);
+  });
+
+  it("el administrador general ve todos los recintos, sin asignaciones", async () => {
+    // Su alcance no viene de facility_admin_assignments: la cuenta de
+    // demostración no tiene ninguna y debe verlos todos igualmente.
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+
+    const asignables = await repo.listarRecintosAsignables();
+    const propios = await repo.listarRecintosAsignados();
+
+    expect(asignables.length).toBeGreaterThan(0);
+    expect(propios.length).toBe(asignables.length);
+  });
+});

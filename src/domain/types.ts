@@ -6,7 +6,35 @@
  * tokens ni correos de terceros.
  */
 
-export type Rol = "usuario" | "administrador";
+/**
+ * Roles del sistema.
+ *
+ * `administrador` gestiona sólo los recintos que tiene asignados
+ * (REQ-29); `administrador_general` todos los de la organización, y es
+ * quien otorga el rol de administrador y asigna los recintos.
+ */
+export type Rol = "usuario" | "administrador" | "administrador_general";
+
+/** Una cuenta con rol de administración, para el panel general. */
+export interface AdministradorListado {
+  correo: string;
+  nombre: string;
+  rol: Rol;
+  /** Nombres de los recintos a su cargo. */
+  recintos: string[];
+}
+
+/** Recinto tal como lo ve el administrador general al asignar. */
+export interface RecintoAsignable {
+  id: string;
+  nombre: string;
+  activo: boolean;
+}
+
+/** Un administrador general también administra, con más alcance. */
+export function esAdministrador(rol: Rol): boolean {
+  return rol === "administrador" || rol === "administrador_general";
+}
 
 /** Estado almacenado. "pasada" no se guarda: se deriva del tiempo. */
 export type EstadoReserva = "vigente" | "cancelada";

@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { Cargando } from "./ui/Estados";
+import { esAdministrador } from "../domain/types";
 
 /**
  * Guardia de rutas por sesión y rol.
@@ -15,7 +16,7 @@ export default function ProtectedRoute({
   rol,
 }: {
   children: ReactElement;
-  rol?: "administrador";
+  rol?: "administrador" | "administrador_general";
 }) {
   const { fase, perfil } = useAuth();
   const ubicacion = useLocation();
@@ -34,7 +35,11 @@ export default function ProtectedRoute({
     );
   }
 
-  if (rol === "administrador" && perfil.rol !== "administrador") {
+  if (rol === "administrador_general" && perfil.rol !== "administrador_general") {
+    return <Navigate to="/catalogo" replace />;
+  }
+
+  if (rol === "administrador" && !esAdministrador(perfil.rol)) {
     return <Navigate to="/catalogo" replace state={{ sinPermiso: true }} />;
   }
 
