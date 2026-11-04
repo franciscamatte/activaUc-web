@@ -81,12 +81,42 @@ desplegar() {
   ( cd "$PROYECTO" && npx supabase functions deploy "$nombre" "${ARGS[@]}" "${extra[@]}" )
 }
 
+# Orden de despliegue. Es una lista aparte porque un arreglo asociativo
+# de bash no tiene orden definido, y conviene desplegar los workers
+# después de las funciones de usuario.
+ORDEN=(
+  google-oauth-start
+  google-oauth-callback
+  google-calendar-disconnect
+  crear-administrador
+  process-calendar-jobs
+  process-notification-jobs
+  twilio-status-webhook
+  cron-dispatch
+)
+
+# Tener dos listas invita a añadir una función a una y olvidarla en la
+# otra, que es justo lo que pasó con `crear-administrador`: se desplegaba
+# todo menos ella, sin un solo error. Esto lo convierte en un fallo.
+for nombre in "${!FUNCIONES[@]}"; do
+  encontrada=false
+  for ordenada in "${ORDEN[@]}"; do
+    [[ "$ordenada" == "$nombre" ]] && encontrada=true
+  done
+  if [[ "$encontrada" == false ]]; then
+    echo "La función $nombre está en FUNCIONES pero no en ORDEN." >&2
+    exit 2
+  fi
+done
+if [[ "${#ORDEN[@]}" -ne "${#FUNCIONES[@]}" ]]; then
+  echo "ORDEN tiene ${#ORDEN[@]} funciones y FUNCIONES ${#FUNCIONES[@]}." >&2
+  exit 2
+fi
+
 if [[ -n "$SOLO" ]]; then
   desplegar "$SOLO"
 else
-  for nombre in google-oauth-start google-oauth-callback google-calendar-disconnect \
-                process-calendar-jobs process-notification-jobs \
-                twilio-status-webhook cron-dispatch; do
+  for nombre in "${ORDEN[@]}"; do
     desplegar "$nombre"
   done
 fi
