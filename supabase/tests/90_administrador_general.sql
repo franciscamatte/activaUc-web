@@ -255,3 +255,48 @@ begin
   raise notice 'OK · cada respuesta de la asignación trae su código';
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- Conceder el rol sin recintos
+-- ---------------------------------------------------------------------
+-- El requisito habla de «uno o más recintos a su cargo», y así termina:
+-- `admin_create_facility` asigna el recinto a quien lo crea. Exigir uno
+-- antes obligaría a inventar un recinto para poder nombrar a nadie, así
+-- que se admite ninguno y se comprueba que el camino completo funciona.
+do $$
+declare
+  _general uuid; _usuario uuid;
+  _r jsonb; _fac uuid;
+begin
+  _general := test_helpers.create_user('g8@uc.cl', 'Gabriela SinRecintos', 'administrador_general');
+  _usuario := test_helpers.create_user('u8@uc.cl', 'Ulises SinRecintos');
+
+  perform test_helpers.login_as(_general);
+  _r := public.admin_general_asignar_administrador('u8@uc.cl', null);
+  assert (_r ->> 'ok')::boolean, format('La asignación sin recintos falló: %s', _r);
+  assert _r ->> 'mensaje' like '%sin recintos%',
+    format('El mensaje debería decir que todavía no tiene recintos: %s', _r);
+
+  assert (select role::text from public.profiles where id = _usuario) = 'administrador',
+    'El rol no quedó asignado';
+  assert (select count(*) from public.facility_admin_assignments where admin_id = _usuario) = 0,
+    'No debería tener asignaciones';
+
+  -- Y puede crear el primero, que queda a su cargo.
+  perform test_helpers.login_as(_usuario);
+  _r := public.admin_create_facility('Recinto Primerizo', 'Gimnasio');
+  assert (_r ->> 'ok')::boolean, format('No pudo crear su primer recinto: %s', _r);
+  _fac := (_r ->> 'facility_id')::uuid;
+
+  assert public.is_facility_admin(_usuario, _fac),
+    'El recinto que creó no quedó a su cargo';
+
+  -- Pero sigue sin alcanzar los de otros.
+  assert not public.is_facility_admin(
+    _usuario,
+    (select id from public.facilities where name = 'Recinto Uno')
+  ), 'No debería alcanzar un recinto que no creó ni tiene asignado';
+
+  raise notice 'OK · se puede conceder el rol sin recintos y crear el primero';
+end;
+$$;

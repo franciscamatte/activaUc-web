@@ -1355,6 +1355,22 @@ export class MockRepository implements ActivaRepository {
     return [];
   }
 
+  async descartarIncidencia(
+    tipo: IncidenciaIntegracion["tipo"],
+    _referenciaId: string,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    const cuenta = this.cuentaActual();
+    if (!esAdministrador(cuenta.rol)) {
+      throw new AppError("permisos", "Acceso restringido a administradores.");
+    }
+    if (tipo !== "whatsapp" && tipo !== "google_calendar") {
+      return { ok: false, mensaje: "Tipo de incidencia desconocido." };
+    }
+    // Sin colas reales no hay nada que descartar, y decir que se
+    // descartó algo que no existe sería inventar un resultado.
+    return { ok: false, mensaje: "No encontramos esa incidencia." };
+  }
+
   async listarAuditoria(recintoId: string | null): Promise<EntradaAuditoria[]> {
     this.cuentaActual();
     return this.estado.auditoria.filter((e) => !recintoId || e.recintoId === recintoId);

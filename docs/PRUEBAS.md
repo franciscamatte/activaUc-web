@@ -21,12 +21,12 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**270 pruebas en 11 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**271 pruebas en 11 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
 |---|---|---|
-| `src/data/mockRepository.test.ts` | 81 | Recorrido completo: registro, sesión, perfil, consentimiento, filtros, reservar, duplicados, agotamiento, cancelaciones, administración, avisos de cupo y administrador general (incluida la creación de cuentas) |
+| `src/data/mockRepository.test.ts` | 82 | Recorrido completo: registro, sesión, perfil, consentimiento, filtros, reservar, duplicados, agotamiento, cancelaciones, administración, avisos de cupo y administrador general (incluida la creación de cuentas) |
 | `src/test/twilioWhatsapp.test.ts` | 40 | Envío con plantilla y con texto libre, validación de destino, códigos de error, **validación de la firma del webhook**, plantillas en español |
 | `src/domain/reservationRules.test.ts` | 35 | Selección de bloques, ventana de 2 h de cancelación (incluido el límite exacto), exención de los dos roles de administración, regla del recordatorio, separación vigentes/pasadas, filtro por rango horario con zona horaria, validación de bloques |
 | `src/test/oauthCrypto.test.ts` | 24 | Cifrado AES-256-GCM de tokens, detección de manipulación, firma del `state`, intento de suplantación de usuario, id determinístico de evento |
@@ -111,11 +111,11 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 | `20_reservations.sql` | Capacidad, duplicados, agotamiento con fallo limpio; bloques pasados, inactivos y de recintos inactivos; **regla exacta del recordatorio de 2 h**; idempotencia de la cola de Calendar; límite de solicitudes por usuario |
 | `30_cancellations.sql` | Ventana de 2 h; cancelación de reserva ajena (debe fallar); reserva iniciada y vencida; idempotencia de cancelar dos veces; administrador no asignado (debe fallar); administrador asignado sin ventana; aviso por WhatsApp; cupo liberado disponible al instante; encolado de eliminación de eventos en sus dos casos |
 | `40_rls.sql` | Con los roles `anon` y `authenticated` **reales**: disponibilidad pública sin datos personales; aislamiento de perfiles y reservas; imposibilidad de escribir en `reservations`; imposibilidad de escalar el rol; tokens OAuth inaccesibles; administrador acotado a sus recintos; colas y webhooks reservados al backend; y una comprobación final de que ningún intento de escritura cruzada surtió efecto |
-| `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad de WhatsApp; **idempotencia del webhook y no retroceso de «entregado»**; reintentos y fallos definitivos; revocación de consentimiento; recuperación de trabajos interrumpidos; informe de integraciones |
+| `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad de WhatsApp; **idempotencia del webhook y no retroceso de «entregado»**; reintentos y fallos definitivos; revocación de consentimiento; recuperación de trabajos interrumpidos; informe de integraciones; **descartar una incidencia** retira del informe sin borrar la fila y sólo la puede descartar quien administra ese recinto |
 | `60_block_series.sql` | Creación de series (REQ-30): autorización sólo al administrador asignado; validaciones que rechazan antes de escribir; vista previa que cuenta sin escribir; serie diaria y por días de la semana **en hora local de Santiago**; repetir la serie no duplica; extender respeta lo publicado; bloques en el pasado omitidos sin fallar; desactivación en serie que conserva las reservas confirmadas |
 | `70_despacho_inmediato.sql` | Los cuatro disparadores de despacho existen y son **por sentencia**; reservar y cancelar siguen funcionando con ellos puestos; y, lo que importa, **un fallo del despacho no impide reservar**: el trabajo queda encolado para que lo recoja el cron |
 | `80_canal_correo.sql` | El canal de correo no se cruza con WhatsApp: consentimientos independientes (el correo no exige teléfono); con un solo canal consentido no se encola el otro; con ambos, **dos trabajos por aviso** con claves de idempotencia distintas y la de WhatsApp conservando su prefijo histórico; revocar un canal descarta lo suyo y **no toca** lo del otro; el reclamo resuelve el destino de cada canal y la bitácora guarda sólo el dominio del correo; canal y destino restringidos por `check` |
-| `90_administrador_general.sql` | El rol de administrador general (REQ-29): que sólo él asigne administradores, que un usuario común y un administrador de recintos no puedan; que **no** pueda cambiar su propio rol, degradar a otro general ni conceder el rol general —ni por la función ni por una escritura directa—; que un recinto inexistente se informe sin dejar el rol a medias; que alcance recintos que no tiene asignados y pueda cancelar sin la ventana de 2 h; y que el listado esté acotado a él |
+| `90_administrador_general.sql` | El rol de administrador general (REQ-29): que se pueda conceder **sin recintos** y que el primero que cree esa persona quede a su cargo, sin alcanzar los ajenos; que sólo él asigne administradores, que un usuario común y un administrador de recintos no puedan; que **no** pueda cambiar su propio rol, degradar a otro general ni conceder el rol general —ni por la función ni por una escritura directa—; que un recinto inexistente se informe sin dejar el rol a medias; que alcance recintos que no tiene asignados y pueda cancelar sin la ventana de 2 h; y que el listado esté acotado a él |
 | `95_aviso_cupo_liberado.sql` | El aviso de cupo (SC-2): que sólo se pida sobre bloques llenos, futuros y sin reserva propia; que una cancelación avise a quien esperaba, encolando con `block_id` y sin reserva; que **no** avise dos veces, ni por una segunda cancelación ni por una actualización posterior; que sin canal consentido la solicitud se consuma igual para no reaparecer; y que cada persona gestione sólo las suyas |
 
 Las aserciones usan el `ASSERT` de PL/pgSQL: si una condición falla, la
@@ -368,7 +368,7 @@ paralelo:
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, las 270 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, las 271 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la prueba de concurrencia contra un PostgreSQL 16 real |
 
 El trabajo `base` aplica las migraciones en orden sobre una base vacía,

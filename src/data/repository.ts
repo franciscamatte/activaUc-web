@@ -232,5 +232,14 @@ export interface ActivaRepository {
     alcance: "vigentes" | "historial" | "todas",
   ): Promise<ReservaAdmin[]>;
   listarIncidenciasIntegracion(): Promise<IncidenciaIntegracion[]>;
+  /**
+   * Retira del informe una integración en error ya resuelta. No borra la
+   * fila: REQ-27 exige poder responder después qué pasó con el mensaje
+   * de una reserva.
+   */
+  descartarIncidencia(
+    tipo: IncidenciaIntegracion["tipo"],
+    referenciaId: string,
+  ): Promise<{ ok: boolean; mensaje: string }>;
   listarAuditoria(recintoId: string | null): Promise<EntradaAuditoria[]>;
 }

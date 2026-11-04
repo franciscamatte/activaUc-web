@@ -1113,6 +1113,34 @@ describe("administrador general (REQ-29)", () => {
     expect(propios.length).toBe(asignables.length);
   });
 
+  it("concede el rol sin recintos: el primero que cree queda a su cargo", async () => {
+    // El requisito dice «uno o más recintos a su cargo», y así acaba:
+    // `crearRecinto` asigna el recinto a quien lo crea. Exigir uno antes
+    // obligaría a inventar un recinto para poder nombrar a nadie.
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const r = await repo.asignarAdministrador(CORREO, []);
+    expect(r.ok).toBe(true);
+
+    const lista = await repo.listarAdministradores();
+    const nuevo = lista.find((a) => a.correo === CORREO)!;
+    expect(nuevo.rol).toBe("administrador");
+    expect(nuevo.recintos).toEqual([]);
+
+    // Y puede crear el suyo, que queda a su cargo.
+    await repo.iniciarSesion(CORREO, CLAVE);
+    const creado = await repo.crearRecinto({
+      nombre: "Gimnasio recién creado",
+      tipo: "Gimnasio",
+      descripcion: "",
+      horarioFuncionamiento: "",
+      activo: true,
+    });
+    expect(creado.ok).toBe(true);
+
+    const propios = await repo.listarRecintosAsignados();
+    expect(propios.map((p) => p.nombre)).toContain("Gimnasio recién creado");
+  });
+
   it("el panel de reservas le responde aunque no tenga asignaciones", async () => {
     // El alcance por rol tiene que llegar hasta el panel: si el listado
     // se filtrara por asignaciones, devolvería cero filas sin error, que

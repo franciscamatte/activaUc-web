@@ -338,3 +338,121 @@ begin
   raise notice 'OK · informe de integraciones del administrador';
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- REQ-33 · descartar una incidencia ya resuelta
+-- ---------------------------------------------------------------------
+-- El aviso del panel sólo sirve si se puede apagar cuando ya no hay nada
+-- que arreglar. Lo que importa: que se descarten sólo las que están en
+-- error, sólo de los recintos propios, que la fila no se borre —es la
+-- trazabilidad de REQ-27— y que quede constancia de quién lo hizo.
+do $$
+declare
+  _admin uuid; _otro uuid; _u uuid;
+  _fac uuid; _blk uuid; _res uuid;
+  _trabajo uuid; _mensaje uuid;
+  _job public.notification_jobs;
+  _r jsonb; _n int;
+begin
+  _admin := test_helpers.create_user('i20@uc.cl', 'Ana Descarta', 'administrador');
+  _otro  := test_helpers.create_user('i21@uc.cl', 'Otro Admin', 'administrador');
+  _u     := test_helpers.create_user('i22@uc.cl', 'Usuaria Descarte');
+
+  insert into public.facilities (name, facility_type)
+  values ('Recinto Descarte 50', 'Tenis') returning id into _fac;
+  insert into public.facility_admin_assignments (admin_id, facility_id) values (_admin, _fac);
+
+  -- Sin conexión de calendario no se encola trabajo de Calendar, y la
+  -- prueba necesita una incidencia de cada tipo.
+  insert into public.calendar_connections
+    (user_id, status, refresh_token_encrypted, access_token_encrypted, access_token_expires_at)
+  values (_u, 'conectado', 'v1.a.b', 'v1.a.b', now() + interval '1 hour');
+
+  perform test_helpers.login_as(_u);
+  perform public.set_whatsapp_consent('+56955554444', true);
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '8 hours', now() + interval '9 hours', 4) returning id into _blk;
+  _res := (public.create_reservation_strict(_blk) ->> 'reservation_id')::uuid;
+
+  select id into _trabajo from public.calendar_sync_jobs where reservation_id = _res limit 1;
+  assert _trabajo is not null, 'La reserva no encoló trabajo de Calendar';
+
+  -- La fila de whatsapp_messages la escribe el despacho, no la reserva:
+  -- se recorre ese camino para tener una incidencia de verdad.
+  perform test_helpers.logout();
+  perform public.claim_notification_jobs(10);
+  select * into _job from public.notification_jobs
+   where reservation_id = _res and kind = 'confirmacion' and channel = 'whatsapp';
+  assert _job.id is not null, 'No se encoló la confirmación por WhatsApp';
+  perform public.complete_notification_job(_job.id, 'SM_DESCARTE_0001', '+56955554444');
+
+  select id into _mensaje from public.whatsapp_messages
+   where provider_message_sid = 'SM_DESCARTE_0001';
+  assert _mensaje is not null, 'El despacho no registró el mensaje';
+
+  -- Todavía no están en error: no hay nada que descartar.
+  perform test_helpers.login_as(_admin);
+  _r := public.admin_descartar_incidencia('google_calendar', _trabajo);
+  assert _r ->> 'codigo' = 'no_es_incidencia',
+    format('Una integración que no falló no debería descartarse: %s', _r);
+
+  -- Se las deja en error, como habría quedado un fallo real.
+  update public.calendar_sync_jobs set status = 'error', last_error = 'falló de prueba'
+   where id = _trabajo;
+  update public.whatsapp_messages set status = 'fallido', error_message = 'falló de prueba'
+   where id = _mensaje;
+
+  select count(*) into _n from public.admin_integration_report(100)
+   where status in ('error', 'fallido');
+  assert _n = 2, format('El informe debería traer las 2 incidencias, trajo %s', _n);
+
+  -- Un administrador de otro recinto no puede descartarlas.
+  perform test_helpers.login_as(_otro);
+  _r := public.admin_descartar_incidencia('google_calendar', _trabajo);
+  assert _r ->> 'codigo' = 'no_autorizado',
+    format('Un administrador ajeno no debería poder descartar: %s', _r);
+
+  -- Un usuario común, tampoco.
+  perform test_helpers.login_as(_u);
+  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  assert _r ->> 'codigo' = 'no_autorizado',
+    format('Un usuario común no debería poder descartar: %s', _r);
+
+  -- El administrador del recinto sí.
+  perform test_helpers.login_as(_admin);
+  _r := public.admin_descartar_incidencia('google_calendar', _trabajo);
+  assert (_r ->> 'ok')::boolean, format('No se pudo descartar: %s', _r);
+  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  assert (_r ->> 'ok')::boolean, format('No se pudo descartar el mensaje: %s', _r);
+
+  -- Desaparecen del informe...
+  select count(*) into _n from public.admin_integration_report(100)
+   where status in ('error', 'fallido');
+  assert _n = 0, format('El informe seguía contando %s incidencias descartadas', _n);
+
+  -- ...pero las filas siguen ahí, que es lo que pide la trazabilidad.
+  assert exists (
+    select 1 from public.calendar_sync_jobs where id = _trabajo and dismissed_at is not null
+  ), 'La fila del trabajo de Calendar no debería borrarse al descartarla';
+  assert exists (
+    select 1 from public.whatsapp_messages where id = _mensaje and dismissed_by = _admin
+  ), 'El mensaje no guardó quién lo descartó';
+
+  -- Y no se descarta dos veces.
+  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  assert _r ->> 'codigo' = 'ya_descartada',
+    format('Descartar dos veces debería informarse: %s', _r);
+
+  -- Un tipo inventado no toca nada.
+  _r := public.admin_descartar_incidencia('telepatia', _mensaje);
+  assert _r ->> 'codigo' = 'tipo_desconocido',
+    format('Un tipo desconocido debería rechazarse: %s', _r);
+
+  assert exists (
+    select 1 from public.reservation_audit_log
+     where action = 'incidencia_descartada' and actor_id = _admin
+  ), 'No quedó constancia en la auditoría';
+
+  raise notice 'OK · descartar incidencias retira del informe sin borrar la fila';
+end;
+$$;

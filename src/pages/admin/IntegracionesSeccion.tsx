@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ActivaRepository } from "../../data";
 import { useAsync } from "../../state/useAsync";
 import type { IncidenciaIntegracion } from "../../domain/types";
 import { formatearFechaHora, formatearFechaMedia, formatearHora } from "../../lib/format";
+import { aAppError } from "../../lib/errors";
 import { esModoMock } from "../../data";
 import Alerta from "../../components/ui/Alerta";
 import Boton from "../../components/ui/Boton";
@@ -35,6 +36,32 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
   const incidencias = useAsync<IncidenciaIntegracion[]>(cargar);
 
   const lista = useMemo(() => incidencias.datos ?? [], [incidencias.datos]);
+
+  // Descartar una incidencia la retira del informe sin borrar la fila:
+  // el registro de envíos es la trazabilidad que pide REQ-27.
+  const [descartando, setDescartando] = useState<string | null>(null);
+  const [errorDescarte, setErrorDescarte] = useState<string | null>(null);
+
+  async function descartar(incidencia: IncidenciaIntegracion) {
+    const clave = `${incidencia.tipo}-${incidencia.referenciaId}`;
+    setErrorDescarte(null);
+    setDescartando(clave);
+    try {
+      const r = await repositorio.descartarIncidencia(
+        incidencia.tipo,
+        incidencia.referenciaId,
+      );
+      if (!r.ok) {
+        setErrorDescarte(r.mensaje);
+        return;
+      }
+      await incidencias.recargar();
+    } catch (e) {
+      setErrorDescarte(aAppError(e, "descartar la incidencia").message);
+    } finally {
+      setDescartando(null);
+    }
+  }
 
   const resumen = useMemo(() => {
     const contar = (predicado: (i: IncidenciaIntegracion) => boolean) =>
@@ -112,7 +139,19 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
             <Alerta tono="aviso" titulo="Hay integraciones con error">
               Las reservas afectadas siguen siendo válidas. Revisa los detalles abajo y
               consulta <code className="rounded bg-amber-100 px-1">docs/OPERACION.md</code>{" "}
-              para los pasos de recuperación.
+              para los pasos de recuperación. Cuando una ya esté resuelta o no haya nada
+              que hacer, <strong>descártala</strong>: deja de contar aquí y la fila se
+              conserva para la trazabilidad.
+            </Alerta>
+          ) : null}
+
+          {errorDescarte ? (
+            <Alerta
+              tono="error"
+              titulo="No pudimos descartar la incidencia"
+              onCerrar={() => setErrorDescarte(null)}
+            >
+              {errorDescarte}
             </Alerta>
           ) : null}
 
@@ -128,6 +167,9 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
                   <th scope="col" className="px-4 py-3 font-medium">Estado</th>
                   <th scope="col" className="px-4 py-3 font-medium">Intentos</th>
                   <th scope="col" className="px-4 py-3 font-medium">Detalle</th>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -166,6 +208,21 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
 
                       <td className="max-w-xs px-4 py-3 text-xs text-slate-600">
                         {incidencia.ultimoError ?? "Sin incidencias"}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {incidencia.estado === "error" || incidencia.estado === "fallido" ? (
+                          <Boton
+                            variante="secundario"
+                            tamano="pequeno"
+                            cargando={
+                              descartando === `${incidencia.tipo}-${incidencia.referenciaId}`
+                            }
+                            onClick={() => void descartar(incidencia)}
+                          >
+                            Descartar
+                          </Boton>
+                        ) : null}
                       </td>
                     </tr>
                   );

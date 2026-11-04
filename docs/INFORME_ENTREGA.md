@@ -174,7 +174,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 11 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 12 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
@@ -198,6 +198,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261104000900_administrador_general.sql` | 583 | Rol `administrador_general` (REQ-29): amplía `is_admin` e `is_facility_admin`, abre la barrera anti-escalada sólo para la vía sancionada, y añade las funciones de asignar, retirar y listar administradores |
 | `20261104001000_aviso_cupo_liberado.sql` | 388 | Aviso de cupo liberado (SC-2): tabla `block_watchers`, tipo de notificación `cupo_liberado`, `block_id` en la cola, disparador por sentencia sobre las cancelaciones y reclamo que resuelve el horario desde el bloque |
 | `20261104001100_codigo_en_asignacion.sql` | 129 | Un campo `codigo` en cada respuesta de `admin_general_asignar_administrador`, para que la Edge Function `crear-administrador` distinga «ese correo no tiene cuenta» sin decidir por el texto del mensaje. No cambia ninguna regla |
+| `20261104001200_descartar_incidencias.sql` | 402 | Descartar una integración en error ya resuelta (REQ-33): marca `dismissed_at`/`dismissed_by` en `whatsapp_messages` y `calendar_sync_jobs`, función `admin_descartar_incidencia`, el informe deja de contarlas y la fila se conserva porque es la trazabilidad de REQ-27. Además, conceder el rol de administrador sin recintos se informa con propiedad |
 
 Las 14 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
@@ -331,7 +332,7 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  270 passed (270)
+     Tests  271 passed (271)
 ```
 
 | Archivo | Pruebas |
@@ -392,7 +393,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 270 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 271 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de

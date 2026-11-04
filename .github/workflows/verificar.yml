@@ -8,7 +8,7 @@
 #
 # Dos trabajos en paralelo:
 #
-#   · `cliente`  · lint, typecheck, 270 pruebas con Vitest y build.
+#   · `cliente`  · lint, typecheck, 271 pruebas con Vitest y build.
 #   · `base`     · las 10 suites SQL contra un PostgreSQL de verdad,
 #                  aplicando las migraciones en orden sobre una base
 #                  vacía. Eso verifica además que `supabase db push`

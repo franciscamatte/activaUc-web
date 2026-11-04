@@ -324,6 +324,32 @@ where status = 'error'
 persona revocó el acceso desde su cuenta Google; un `63003` de Twilio, que el
 número no tiene WhatsApp. Reintentar sólo consume cuota.
 
+### Descartar lo que ya no tiene arreglo
+
+Un fallo definitivo se queda en la tabla, y el panel sigue avisando de él para
+siempre. Eso acaba con el aviso: cuando siempre hay errores, nadie lo mira.
+
+Los administradores lo resuelven desde la pestaña **Integraciones** con el
+botón **Descartar**, que es la vía normal. Desde la base, para varios a la vez:
+
+```sql
+-- Los fallos de la puesta en marcha, con una causa que ya no se repite
+update public.whatsapp_messages
+set dismissed_at = now(), dismissed_by = '<uuid del operador>'
+where status = 'fallido'
+  and dismissed_at is null
+  and (error_message ilike '%ContentSid Required%'
+       or error_message ilike '%not verified for this trial account%');
+```
+
+**La fila no se borra nunca**: es la trazabilidad que pide REQ-27, y hay que
+poder responder meses después qué pasó con el mensaje de una reserva.
+`dismissed_at` sólo la saca del informe, y la auditoría guarda quién lo
+decidió (`incidencia_descartada`).
+
+Descartar no arregla nada. Si la causa sigue viva, el próximo envío vuelve a
+fallar; antes de descartar, comprueba que lo que falló ya está corregido.
+
 ### Resincronizar las reservas futuras de una persona
 
 Cuando alguien reconecta su calendario tras un error:

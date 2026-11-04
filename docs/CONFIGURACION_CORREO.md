@@ -323,3 +323,52 @@ aceptó, no que se entregó, y que `whatsapp_messages.status` se queda en
 `enviado` sin pasar a `entregado` como sí ocurre en WhatsApp. Para
 seguirle la pista hay que ir a la consola de Twilio con ese
 `operationId`.
+
+---
+
+## 7. Cuánto tarda en llegar un correo, y dónde está el retraso
+
+Conviene separar las dos mitades del camino, porque sólo una está en
+este repositorio.
+
+**Lo que hace ActivaUC** se mide con la propia cola: `created_at` es el
+instante del evento (se confirmó una reserva, se liberó un cupo) y
+`completed_at`, el instante en que el proveedor aceptó el envío.
+
+```sql
+select channel::text, kind::text, count(*) as n,
+       round(min(extract(epoch from (completed_at - created_at)))::numeric, 1) as min_s,
+       round(avg(extract(epoch from (completed_at - created_at)))::numeric, 1) as medio_s,
+       round(max(extract(epoch from (completed_at - created_at)))::numeric, 1) as max_s
+from public.notification_jobs
+where status = 'completado' and kind::text <> 'recordatorio'
+group by 1, 2 order by 1, 2;
+```
+
+Medido sobre los envíos reales del proyecto: **entre 1,1 y 2,9 segundos**,
+con 1,6 de media para la confirmación por correo. No hay espera de cron
+en medio: un disparador despacha la cola en cuanto se encola el trabajo, y
+`pg_cron` cada minuto es sólo la red de seguridad. Esa parte no se puede
+acelerar de forma apreciable.
+
+**Lo que no hace ActivaUC** es la entrega. Entre que el proveedor acepta
+el correo y el buzón lo muestra pueden pasar minutos, y la causa habitual
+es el remitente:
+
+> Un remitente `@gmail.com` enviado a través de Brevo **no pasa la
+> alineación DMARC**: el dominio del «De:» es `gmail.com`, pero quien
+> firma es Brevo, que no puede firmar por Gmail. Los receptores no suelen
+> rechazarlo —lo retienen un rato (*greylisting*) o lo mandan a
+> promociones—, y de ahí vienen los minutos de espera.
+
+El arreglo no es código: es un **dominio propio verificado en Brevo**
+(SPF + DKIM + el registro DMARC del dominio) y usarlo en
+`BREVO_EMAIL_FROM`. Con eso el correo queda alineado y la entrega pasa a
+ser de segundos. Mientras el remitente sea una dirección de un proveedor
+de buzones gratuito, el retraso seguirá ahí por mucho que el backend
+despache en un segundo.
+
+Si hace falta comprobar dónde está el retraso en un caso concreto: el
+instante de aceptación está en `completed_at`, y el de entrega, en el
+registro de envíos de Brevo. La diferencia entre ambos es del proveedor y
+del buzón, no del sistema.

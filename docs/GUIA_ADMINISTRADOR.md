@@ -170,6 +170,21 @@ persona tiene su cupo garantizado; lo que falló es el evento de calendario o el
 mensaje. Si ves errores, avisa al equipo técnico con la información de esta
 pantalla; los pasos de recuperación están en `docs/OPERACION.md`.
 
+#### Descartar una incidencia
+
+Las que están en error traen un botón **Descartar**. Sirve para cuando ya no
+hay nada que hacer: un fallo de los primeros días, una plantilla que el
+proveedor todavía no había aprobado, un número que ya se corrigió. Al
+descartarla deja de contar en «Con error» y el aviso de arriba se apaga.
+
+Dos cosas que conviene saber:
+
+- **La fila no se borra.** Queda marcada con quién la descartó y cuándo, y la
+  decisión aparece en **Auditoría**. Hace falta para poder responder meses
+  después qué pasó con el mensaje de una reserva.
+- **Descartar no arregla nada.** Si el error se repite en reservas nuevas, hay
+  algo que corregir en la configuración; descartar sólo limpia el historial.
+
 ### Auditoría
 
 Registro de las acciones sobre tus recintos: reservas creadas y canceladas,
@@ -189,7 +204,9 @@ historial completo.
 Aquí se concede y se retira el rol de administrador de recintos.
 
 Para habilitar a alguien escribes su correo, marcas los recintos a su cargo
-y pulsas «Conceder el rol».
+y pulsas «Conceder el rol». Puedes **no marcar ninguno**: entonces el primer
+recinto que esa persona cree queda a su cargo, que es lo práctico cuando se
+incorpora alguien para un recinto que todavía no existe.
 
 Si ese correo **no tiene cuenta** en ActivaUC, el panel lo dice y entonces te
 pide el nombre de la persona para **crearla ahí mismo**. La cuenta se crea
@@ -265,7 +282,9 @@ Recuerda: reducir la capacidad no cancela reservas existentes.
 6. **Desactiva en vez de improvisar.** Si un recinto no está disponible,
    desactívalo: es mejor que dejarlo visible y cancelar reservas después.
 7. **Revisa Integraciones de vez en cuando.** Si aparecen errores recurrentes,
-   hay algo que corregir en la configuración.
+   hay algo que corregir en la configuración. Los que ya no tienen arreglo
+   posible —fallos de la puesta en marcha— se descartan para que el aviso
+   vuelva a significar algo.
 
 ---
 

@@ -981,6 +981,20 @@ export class SupabaseRepository implements ActivaRepository {
   }
 
   /** REQ-33 · estado de las integraciones por reserva. */
+  async descartarIncidencia(
+    tipo: IncidenciaIntegracion["tipo"],
+    referenciaId: string,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    await this.exigirSesion();
+    const { data, error } = await this.cliente.rpc("admin_descartar_incidencia", {
+      _tipo: tipo,
+      _id: referenciaId,
+    });
+    if (error) throw aAppError(error, "descartar la incidencia");
+    const r = data as { ok: boolean; mensaje?: string };
+    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos descartar la incidencia." };
+  }
+
   async listarIncidenciasIntegracion(): Promise<IncidenciaIntegracion[]> {
     await this.exigirSesion();
 

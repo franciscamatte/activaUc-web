@@ -77,10 +77,6 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
       setError("Ingresa un correo válido.");
       return;
     }
-    if (elegidos.length === 0) {
-      setError("Elige al menos un recinto a su cargo.");
-      return;
-    }
     if (ofrecerCrear && nombre.trim().length < 2) {
       setError("Indica el nombre de la persona para crear su cuenta.");
       return;
@@ -170,6 +166,8 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
         <p className="mt-1 text-sm text-slate-600">
           Concede el rol de administrador y define los recintos a su cargo. Si la
           persona todavía no tiene cuenta en ActivaUC, aquí mismo puedes crearla.
+          Puedes concederle el rol <strong>sin recintos</strong>: entonces el primero
+          que cree queda a su cargo.
         </p>
       </div>
 
@@ -226,7 +224,8 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
           <legend className="text-sm font-medium text-slate-800">Recintos a su cargo</legend>
           {asignables.length === 0 ? (
             <p className="mt-2 text-sm text-slate-600">
-              Todavía no hay recintos. Créalos en la sección «Recintos».
+              Todavía no hay recintos. Puedes conceder el rol igualmente: el primer
+              recinto que esa persona cree quedará a su cargo.
             </p>
           ) : (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -242,7 +241,14 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
           )}
         </fieldset>
 
-        <Boton type="submit" cargando={guardando} disabled={asignables.length === 0}>
+        {elegidos.length === 0 ? (
+          <p className="text-sm text-slate-600">
+            Sin recintos marcados: podrá entrar al panel y crear el primero, que
+            quedará a su cargo.
+          </p>
+        ) : null}
+
+        <Boton type="submit" cargando={guardando}>
           {ofrecerCrear ? "Crear la cuenta y conceder el rol" : "Conceder el rol"}
         </Boton>
       </form>

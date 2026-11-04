@@ -188,6 +188,25 @@ de SMS o WhatsApp.
 
 ---
 
+### 2.4 Cuánto tarda en llegar un correo de notificación
+
+El sistema entrega el correo al proveedor en **1 a 3 segundos** desde el
+evento (medido sobre los envíos reales del proyecto, con un disparador que
+despacha la cola en cuanto se encola el trabajo). Lo que puede tardar
+minutos es el tramo siguiente, que no depende de este código.
+
+La causa habitual: un remitente de un buzón gratuito —`@gmail.com`, por
+ejemplo— enviado a través de Brevo no pasa la alineación DMARC, porque el
+dominio del «De:» no es el que firma. Los receptores lo retienen un rato o
+lo mandan a promociones.
+
+Se arregla con un **dominio propio verificado en Brevo** (SPF y DKIM) en
+`BREVO_EMAIL_FROM`. No hay nada que optimizar en el backend: el detalle y
+la consulta para medirlo están en
+[CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 7.
+
+---
+
 ## 3. Topes de plataforma que no te van a afectar
 
 Supabase y Netlify tienen cupos en sus planes gratuitos —tamaño de base
