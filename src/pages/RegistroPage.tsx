@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { aAppError } from "../lib/errors";
+import { destinoSeguro } from "../lib/destino";
 import Alerta from "../components/ui/Alerta";
 import Boton from "../components/ui/Boton";
 import { CampoTexto } from "../components/ui/Campo";
@@ -13,6 +14,11 @@ const LARGO_MINIMO = 8;
 export default function RegistroPage() {
   const { registrarse } = useAuth();
   const navegar = useNavigate();
+  const ubicacion = useLocation();
+
+  // Quien llega aquí desde un bloque que quería reservar vuelve a ese
+  // bloque al terminar, no al catálogo entero.
+  const destino = destinoSeguro((ubicacion.state as { destino?: string } | null)?.destino);
 
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
@@ -56,10 +62,10 @@ export default function RegistroPage() {
         // botón «ingresar el código» era un clic sin información nueva.
         navegar(
           `/verificar?tipo=registro&correo=${encodeURIComponent(correo.trim())}`,
-          { replace: true },
+          { replace: true, state: { destino } },
         );
       } else {
-        navegar("/catalogo", { replace: true });
+        navegar(destino, { replace: true });
       }
     } catch (e) {
       setError(aAppError(e, "crear la cuenta").message);
@@ -139,7 +145,11 @@ export default function RegistroPage() {
 
         <p className="text-center text-sm text-slate-600">
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className="font-medium text-emerald-800 hover:underline">
+          <Link
+            to="/login"
+            state={{ destino }}
+            className="font-medium text-emerald-800 hover:underline"
+          >
             Inicia sesión
           </Link>
         </p>

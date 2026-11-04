@@ -25,6 +25,7 @@ import {
 } from "../domain/codigoVerificacion";
 import type {
   RecintoAsignable,
+  ResultadoCrearAdministrador,
   AdministradorListado,
   Bloque,
   ConexionCalendario,
@@ -398,15 +399,54 @@ export class SupabaseRepository implements ActivaRepository {
   async asignarAdministrador(
     correo: string,
     recintoIds: string[],
-  ): Promise<{ ok: boolean; mensaje: string }> {
+  ): Promise<{ ok: boolean; mensaje: string; codigo?: string }> {
     await this.exigirSesion();
     const { data, error } = await this.cliente.rpc("admin_general_asignar_administrador", {
       _correo: correo.trim().toLowerCase(),
       _recintos: recintoIds,
     });
     if (error) throw aAppError(error, "asignar el administrador");
-    const r = data as { ok: boolean; mensaje?: string };
-    return { ok: r.ok, mensaje: r.mensaje ?? "No pudimos completar la asignación." };
+    const r = data as { ok: boolean; mensaje?: string; codigo?: string };
+    return {
+      ok: r.ok,
+      mensaje: r.mensaje ?? "No pudimos completar la asignación.",
+      ...(r.codigo ? { codigo: r.codigo } : {}),
+    };
+  }
+
+  /**
+   * REQ-29 · crea la cuenta y le concede el rol en una operación.
+   *
+   * Crear cuentas exige la clave de servicio, que nunca puede estar en
+   * el navegador, así que lo hace la Edge Function. Ésta vuelve a
+   * comprobar el rol de quien llama contra la base.
+   */
+  async crearAdministrador(datos: {
+    correo: string;
+    nombre: string;
+    recintoIds: string[];
+  }): Promise<ResultadoCrearAdministrador> {
+    await this.exigirSesion();
+
+    const respuesta = await invocarFuncion<{
+      ok: boolean;
+      mensaje?: string;
+      cuentaCreada?: boolean;
+      correoEnviado?: boolean;
+      motivoCorreo?: string;
+    }>("crear-administrador", {
+      correo: datos.correo.trim().toLowerCase(),
+      nombre: datos.nombre.trim(),
+      recintoIds: datos.recintoIds,
+    });
+
+    return {
+      ok: respuesta.ok === true,
+      mensaje: respuesta.mensaje ?? "No pudimos crear la cuenta.",
+      cuentaCreada: respuesta.cuentaCreada === true,
+      correoEnviado: respuesta.correoEnviado === true,
+      ...(respuesta.motivoCorreo ? { motivoCorreo: respuesta.motivoCorreo } : {}),
+    };
   }
 
   async quitarAdministrador(correo: string): Promise<{ ok: boolean; mensaje: string }> {

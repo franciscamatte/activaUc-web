@@ -17,13 +17,18 @@ interface Props {
 
 /**
  * REQ-29 · el administrador general otorga el rol de administrador de
- * recintos y asigna los recintos a cargo.
+ * recintos, asigna los recintos a cargo y, si la persona todavía no
+ * tiene cuenta, la crea.
  *
- * La cuenta tiene que existir antes: la persona se registra ella misma
- * por el flujo normal y aquí se le concede el rol. Es deliberado —así
- * nadie recibe una contraseña por un canal que no controla— y el
- * mensaje de error lo dice cuando el correo no corresponde a ninguna
- * cuenta.
+ * El formulario pide sólo el correo, que es el caso corriente. Si ese
+ * correo no tiene cuenta, el backend responde `sin_cuenta` y entonces
+ * —y sólo entonces— se pide el nombre y se ofrece crearla, por la Edge
+ * Function `crear-administrador`.
+ *
+ * Ninguna contraseña viaja: la cuenta se crea sin contraseña y la
+ * persona la define por «Olvidé mi contraseña». Si se generara una aquí
+ * habría que entregarla por algún canal, y ese canal sería el punto
+ * débil de todo el sistema de roles.
  *
  * El rol de administrador general no se concede desde aquí: se asigna
  * con acceso directo a la base. Si la aplicación pudiera concederlo, una
@@ -38,6 +43,11 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
   const recintos = useAsync<RecintoAsignable[]>(cargarRecintos);
 
   const [correo, setCorreo] = useState("");
+  const [nombre, setNombre] = useState("");
+  // Pasa a true cuando el backend dice que ese correo no tiene cuenta.
+  // Mientras sea false no se pide el nombre, que sólo hace falta al
+  // crear.
+  const [ofrecerCrear, setOfrecerCrear] = useState(false);
   const [elegidos, setElegidos] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +59,13 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
     setElegidos((previos) =>
       previos.includes(id) ? previos.filter((r) => r !== id) : [...previos, id],
     );
+  }
+
+  function limpiar() {
+    setCorreo("");
+    setNombre("");
+    setOfrecerCrear(false);
+    setElegidos([]);
   }
 
   async function asignar(evento: FormEvent) {
@@ -64,17 +81,43 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
       setError("Elige al menos un recinto a su cargo.");
       return;
     }
+    if (ofrecerCrear && nombre.trim().length < 2) {
+      setError("Indica el nombre de la persona para crear su cuenta.");
+      return;
+    }
 
     setGuardando(true);
     try {
-      const r = await repositorio.asignarAdministrador(correo, elegidos);
+      // Con el nombre a la vista se crea la cuenta si falta; sin él se
+      // intenta sólo la asignación, que es el camino corriente.
+      const r = ofrecerCrear
+        ? await repositorio.crearAdministrador({ correo, nombre, recintoIds: elegidos })
+        : await repositorio.asignarAdministrador(correo, elegidos);
+
       if (r.ok) {
-        setAviso(r.mensaje);
-        setCorreo("");
-        setElegidos([]);
+        const creada = "cuentaCreada" in r && r.cuentaCreada;
+        const enviado = "correoEnviado" in r && r.correoEnviado;
+        const motivo = "motivoCorreo" in r ? r.motivoCorreo : undefined;
+
+        setAviso(
+          creada && !enviado
+            ? `${r.mensaje} No pudimos avisarle por correo${motivo ? `: ${motivo}` : ""} ` +
+              "Dile tú que defina su contraseña en «Olvidé mi contraseña»."
+            : creada
+              ? `${r.mensaje} Le avisamos por correo para que defina su contraseña.`
+              : r.mensaje,
+        );
+        limpiar();
         await admins.recargar();
-      } else {
-        setError(r.mensaje);
+        return;
+      }
+
+      setError(r.mensaje);
+
+      // Ese correo no tiene cuenta: se ofrece crearla en lugar de dejar
+      // a quien administra sin camino.
+      if ("codigo" in r && r.codigo === "sin_cuenta") {
+        setOfrecerCrear(true);
       }
     } catch (e) {
       setError(aAppError(e, "asignar el administrador").message);
@@ -125,8 +168,8 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Administradores de recintos</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Concede el rol de administrador a una cuenta existente y define los recintos
-          a su cargo. La persona debe haberse registrado antes en ActivaUC.
+          Concede el rol de administrador y define los recintos a su cargo. Si la
+          persona todavía no tiene cuenta en ActivaUC, aquí mismo puedes crearla.
         </p>
       </div>
 
@@ -156,8 +199,28 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
           value={correo}
           onChange={(e) => setCorreo(e.target.value)}
           placeholder="nombre@uc.cl"
-          ayuda="Tiene que ser una cuenta ya registrada en la plataforma."
+          ayuda="Si la cuenta no existe, te ofreceremos crearla."
         />
+
+        {ofrecerCrear ? (
+          <>
+            <CampoTexto
+              etiqueta="Nombre de la persona"
+              name="nombre"
+              autoComplete="off"
+              required
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre y apellido"
+              ayuda="Se usa para identificarla en el panel y en el aviso por correo."
+            />
+            <Alerta tono="aviso" titulo="Se va a crear una cuenta nueva">
+              La cuenta se crea <strong>sin contraseña</strong>: la persona la define
+              ella misma en «Olvidé mi contraseña», y le avisamos por correo. Ninguna
+              contraseña viaja por aquí.
+            </Alerta>
+          </>
+        ) : null}
 
         <fieldset>
           <legend className="text-sm font-medium text-slate-800">Recintos a su cargo</legend>
@@ -180,7 +243,7 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
         </fieldset>
 
         <Boton type="submit" cargando={guardando} disabled={asignables.length === 0}>
-          Conceder el rol
+          {ofrecerCrear ? "Crear la cuenta y conceder el rol" : "Conceder el rol"}
         </Boton>
       </form>
 
@@ -190,7 +253,7 @@ export default function AdministradoresSeccion({ repositorio }: Props) {
         {lista.length === 0 ? (
           <SinDatos
             titulo="Todavía no hay administradores"
-            descripcion="Concede el rol a una cuenta registrada con el formulario de arriba."
+            descripcion="Concede el rol con el formulario de arriba."
           />
         ) : (
           <ul className="mt-3 space-y-3">

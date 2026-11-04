@@ -5,6 +5,7 @@ import { useAuth } from "../state/authContext";
 import { esModoMock } from "../data";
 import { CUENTAS_DEMO } from "../data/seed";
 import { aAppError } from "../lib/errors";
+import { destinoSeguro } from "../lib/destino";
 import Alerta from "../components/ui/Alerta";
 import Boton from "../components/ui/Boton";
 import { CampoTexto } from "../components/ui/Campo";
@@ -23,6 +24,11 @@ export default function LoginPage() {
     correoConfirmado?: boolean;
   };
 
+  // El bloque que la persona quería reservar antes de que se le pidiera
+  // la sesión. Acompaña a la persona si decide crear la cuenta o si
+  // tiene que pasar por el código de confirmación.
+  const destino = destinoSeguro(estado.destino);
+
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +42,7 @@ export default function LoginPage() {
 
     try {
       await iniciarSesion(correo, contrasena);
-      navegar(estado.destino ?? "/catalogo", { replace: true });
+      navegar(destino, { replace: true });
     } catch (e) {
       const appError = aAppError(e, "iniciar sesión");
 
@@ -46,7 +52,7 @@ export default function LoginPage() {
       if (appError.tipo === "correo_no_confirmado") {
         navegar(
           `/verificar?tipo=registro&correo=${encodeURIComponent(correo.trim())}`,
-          { replace: true, state: { desdeLogin: true } },
+          { replace: true, state: { desdeLogin: true, destino } },
         );
         return;
       }
@@ -147,6 +153,7 @@ export default function LoginPage() {
         <div className="flex flex-wrap justify-between gap-3 text-sm">
           <Link
             to="/registro"
+            state={{ destino }}
             className="font-medium text-emerald-800 hover:underline focus-visible:outline focus-visible:outline-2"
           >
             Crear una cuenta

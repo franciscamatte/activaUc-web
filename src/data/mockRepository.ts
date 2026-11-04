@@ -43,7 +43,9 @@ import type {
   ResultadoCancelacion,
   ResultadoReserva,
   Rol,
+  ResultadoCrearAdministrador,
 } from "../domain/types";
+import { esAdministrador } from "../domain/types";
 import type {
   TipoVerificacion,
   ActivaRepository,
@@ -108,6 +110,31 @@ export class MockRepository implements ActivaRepository {
 
   private cuenta(correo: string): CuentaDemo | undefined {
     return this.estado.cuentas.find((c) => c.correo === correo.trim().toLowerCase());
+  }
+
+  /**
+   * Alcance de administración, como `is_facility_admin` en el backend:
+   * el administrador general alcanza todos los recintos, y el de
+   * recintos sólo los que tiene asignados. Tenerlo en un solo sitio
+   * evita que una operación nueva se olvide del rol general.
+   */
+  private administraRecinto(cuenta: CuentaDemo, recintoId: string): boolean {
+    if (cuenta.rol === "administrador_general") return true;
+    return this.estado.asignaciones.some(
+      (a) => a.administradorId === cuenta.id && a.recintoId === recintoId,
+    );
+  }
+
+  /** Los recintos que esa cuenta puede administrar. */
+  private recintosAdministrables(cuenta: CuentaDemo): Set<string> {
+    if (cuenta.rol === "administrador_general") {
+      return new Set(this.estado.recintos.map((r) => r.id));
+    }
+    return new Set(
+      this.estado.asignaciones
+        .filter((a) => a.administradorId === cuenta.id)
+        .map((a) => a.recintoId),
+    );
   }
 
   private cuentaActual(): CuentaDemo {
@@ -202,7 +229,10 @@ export class MockRepository implements ActivaRepository {
 
   async iniciarSesion(correo: string, contrasena: string): Promise<void> {
     const cuenta = this.cuenta(correo);
-    if (!cuenta || cuenta.contrasena !== contrasena) {
+    // Una cuenta sin contraseña es una cuenta recién creada por el
+    // administrador general: todavía no hay nada con lo que entrar, y
+    // comparar cadenas vacías la abriría a cualquiera.
+    if (!cuenta || cuenta.contrasena === "" || cuenta.contrasena !== contrasena) {
       throw new AppError(
         "credenciales",
         "El correo o la contraseña no son correctos. Revísalos e inténtalo otra vez.",
@@ -343,23 +373,32 @@ export class MockRepository implements ActivaRepository {
   async asignarAdministrador(
     correo: string,
     recintoIds: string[],
-  ): Promise<{ ok: boolean; mensaje: string }> {
+  ): Promise<{ ok: boolean; mensaje: string; codigo?: string }> {
     const actor = this.exigirAdministradorGeneral();
     const cuenta = this.cuenta(correo);
     if (!cuenta) {
-      return { ok: false, mensaje: "No existe una cuenta con ese correo. Créala primero." };
+      return {
+        ok: false,
+        codigo: "sin_cuenta",
+        mensaje: "No existe una cuenta con ese correo. Créala primero.",
+      };
     }
     if (cuenta.id === actor.id) {
-      return { ok: false, mensaje: "No puedes cambiar tu propio rol." };
+      return { ok: false, codigo: "propio_rol", mensaje: "No puedes cambiar tu propio rol." };
     }
     if (cuenta.rol === "administrador_general") {
       return {
         ok: false,
+        codigo: "es_general",
         mensaje: "Esa cuenta es administradora general; su rol no se cambia desde aquí.",
       };
     }
     if (recintoIds.some((id) => !this.estado.recintos.some((r) => r.id === id))) {
-      return { ok: false, mensaje: "Hay recintos que no existen." };
+      return {
+        ok: false,
+        codigo: "recintos_desconocidos",
+        mensaje: "Hay recintos que no existen.",
+      };
     }
 
     cuenta.rol = "administrador";
@@ -376,7 +415,81 @@ export class MockRepository implements ActivaRepository {
     this.guardar();
     return {
       ok: true,
+      codigo: "asignado",
       mensaje: `Cuenta habilitada como administradora de ${recintoIds.length} recinto(s).`,
+    };
+  }
+
+  /**
+   * REQ-29 · crea la cuenta y le concede el rol.
+   *
+   * En el modo real esto lo hace una Edge Function con la clave de
+   * servicio; aquí se reproduce el resultado visible, incluido que la
+   * cuenta queda **sin contraseña utilizable**: la persona la define por
+   * «Olvidé mi contraseña», igual que en producción.
+   *
+   * `correoEnviado` es false porque en demostración no hay proveedor de
+   * correo. Decir que se envió sería la clase de simulación que el panel
+   * no debe mostrar.
+   */
+  async crearAdministrador(datos: {
+    correo: string;
+    nombre: string;
+    recintoIds: string[];
+  }): Promise<ResultadoCrearAdministrador> {
+    this.exigirAdministradorGeneral();
+
+    const correo = datos.correo.trim().toLowerCase();
+    const nombre = datos.nombre.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      return {
+        ok: false,
+        mensaje: "Ingresa un correo válido.",
+        cuentaCreada: false,
+        correoEnviado: false,
+      };
+    }
+    if (nombre.length < 2) {
+      return {
+        ok: false,
+        mensaje: "Indica el nombre de la persona (al menos 2 caracteres).",
+        cuentaCreada: false,
+        correoEnviado: false,
+      };
+    }
+
+    // Si ya existe, esto es una asignación corriente: no se crea nada.
+    const existente = this.cuenta(correo);
+    if (existente) {
+      const r = await this.asignarAdministrador(correo, datos.recintoIds);
+      return { ...r, cuentaCreada: false, correoEnviado: false };
+    }
+
+    this.estado.cuentas.push({
+      id: crypto.randomUUID(),
+      // Sin contraseña utilizable: ninguna contraseña viaja al crear la
+      // cuenta, ni aquí ni en producción.
+      contrasena: "",
+      correo,
+      nombre,
+      rol: "usuario",
+      confirmado: true,
+      telefono: null,
+      whatsappConsentido: false,
+      whatsappConsentidoEn: null,
+      correoConsentido: false,
+      correoConsentidoEn: null,
+    });
+    this.guardar();
+
+    const r = await this.asignarAdministrador(correo, datos.recintoIds);
+    return {
+      ok: r.ok,
+      mensaje: r.ok ? `Cuenta creada. ${r.mensaje}` : r.mensaje,
+      cuentaCreada: true,
+      correoEnviado: false,
+      motivoCorreo: "En modo demostración no hay proveedor de correo.",
     };
   }
 
@@ -739,9 +852,7 @@ export class MockRepository implements ActivaRepository {
     }
 
     const esDueno = reserva.usuarioId === cuenta.id;
-    const esAdminAsignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === reserva.recintoId,
-    );
+    const esAdminAsignado = this.administraRecinto(cuenta, reserva.recintoId);
 
     if (!esDueno && !esAdminAsignado) {
       return {
@@ -855,17 +966,7 @@ export class MockRepository implements ActivaRepository {
 
     // El administrador general gestiona todos los recintos: su alcance
     // no viene de las asignaciones, igual que en el backend real.
-    if (cuenta.rol === "administrador_general") {
-      return [...this.estado.recintos].sort((a, b) =>
-        a.nombre.localeCompare(b.nombre, "es"),
-      );
-    }
-
-    const ids = new Set(
-      this.estado.asignaciones
-        .filter((a) => a.administradorId === cuenta.id)
-        .map((a) => a.recintoId),
-    );
+    const ids = this.recintosAdministrables(cuenta);
     return this.estado.recintos
       .filter((r) => ids.has(r.id))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
@@ -873,7 +974,7 @@ export class MockRepository implements ActivaRepository {
 
   async crearRecinto(datos: DatosRecinto): Promise<{ ok: boolean; mensaje: string }> {
     const cuenta = this.cuentaActual();
-    if (cuenta.rol !== "administrador") {
+    if (!esAdministrador(cuenta.rol)) {
       throw new AppError("permisos", "Sólo un administrador puede crear recintos.");
     }
     if (datos.nombre.trim().length < 2) {
@@ -913,10 +1014,7 @@ export class MockRepository implements ActivaRepository {
 
   async actualizarRecinto(recintoId: string, datos: Partial<DatosRecinto>): Promise<void> {
     const cuenta = this.cuentaActual();
-    const asignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === recintoId,
-    );
-    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+    if (!this.administraRecinto(cuenta, recintoId)) throw new AppError("permisos", "No administras ese recinto.");
 
     const recinto = this.estado.recintos.find((r) => r.id === recintoId);
     if (!recinto) throw new AppError("no_encontrado", "No encontramos ese recinto.");
@@ -946,10 +1044,7 @@ export class MockRepository implements ActivaRepository {
 
   async crearBloque(datos: DatosBloque): Promise<void> {
     const cuenta = this.cuentaActual();
-    const asignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === datos.recintoId,
-    );
-    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+    if (!this.administraRecinto(cuenta, datos.recintoId)) throw new AppError("permisos", "No administras ese recinto.");
 
     const choque = this.estado.bloques.some(
       (b) => b.recintoId === datos.recintoId && b.activo && b.inicio === datos.inicio,
@@ -984,10 +1079,9 @@ export class MockRepository implements ActivaRepository {
     const bloque = this.estado.bloques.find((b) => b.id === bloqueId);
     if (!bloque) throw new AppError("no_encontrado", "No encontramos ese bloque.");
 
-    const asignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === bloque.recintoId,
-    );
-    if (!asignado) throw new AppError("permisos", "No administras el recinto de ese bloque.");
+    if (!this.administraRecinto(cuenta, bloque.recintoId)) {
+      throw new AppError("permisos", "No administras el recinto de ese bloque.");
+    }
 
     if (datos.inicio !== undefined) bloque.inicio = datos.inicio;
     if (datos.fin !== undefined) bloque.fin = datos.fin;
@@ -1013,10 +1107,7 @@ export class MockRepository implements ActivaRepository {
    */
   async crearSerieBloques(datos: DatosSerieBloques): Promise<ResultadoSerie> {
     const cuenta = this.cuentaActual();
-    const asignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === datos.recintoId,
-    );
-    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+    if (!this.administraRecinto(cuenta, datos.recintoId)) throw new AppError("permisos", "No administras ese recinto.");
 
     const fallo = (error: string, mensaje: string): ResultadoSerie => ({
       ok: false, simulado: datos.simular, creados: 0, omitidosExistentes: 0,
@@ -1161,10 +1252,7 @@ export class MockRepository implements ActivaRepository {
     simular: boolean,
   ): Promise<ResultadoDesactivacionSerie> {
     const cuenta = this.cuentaActual();
-    const asignado = this.estado.asignaciones.some(
-      (a) => a.administradorId === cuenta.id && a.recintoId === recintoId,
-    );
-    if (!asignado) throw new AppError("permisos", "No administras ese recinto.");
+    if (!this.administraRecinto(cuenta, recintoId)) throw new AppError("permisos", "No administras ese recinto.");
 
     const desde = new Date(`${fechaDesde}T00:00:00`).getTime();
     const hasta = new Date(`${fechaHasta}T23:59:59.999`).getTime();
@@ -1217,15 +1305,11 @@ export class MockRepository implements ActivaRepository {
     alcance: "vigentes" | "historial" | "todas",
   ): Promise<ReservaAdmin[]> {
     const cuenta = this.cuentaActual();
-    if (cuenta.rol !== "administrador") {
+    if (!esAdministrador(cuenta.rol)) {
       throw new AppError("permisos", "Acceso restringido a administradores.");
     }
 
-    const permitidos = new Set(
-      this.estado.asignaciones
-        .filter((a) => a.administradorId === cuenta.id)
-        .map((a) => a.recintoId),
-    );
+    const permitidos = this.recintosAdministrables(cuenta);
     if (recintoId && !permitidos.has(recintoId)) {
       throw new AppError("permisos", "No administras ese recinto.");
     }

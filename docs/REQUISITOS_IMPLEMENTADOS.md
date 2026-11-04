@@ -43,7 +43,7 @@ respaldo no cuenta.
 
 | Req | Descripción | Estado | Dónde está | Verificación |
 |---|---|---|---|---|
-| REQ-12 | Crear reserva validando la capacidad máxima | Implementado | `create_reservation_strict()` en `20261016000200_functions.sql` | `20_reservations.sql`; `test:concurrency` escenario 2: **100 solicitudes sobre capacidad 20 → exactamente 20 reservas** |
+| REQ-12 | Crear reserva validando la capacidad máxima | Implementado | `create_reservation_strict()` en `20261016000200_functions.sql` | `20_reservations.sql`; `test:concurrency` escenario 2: **100 solicitudes simultáneas sobre capacidad 20 → exactamente 20 reservas** (en la verificación automática, con `max_connections=200`) |
 | REQ-13 | Impedir reservas duplicadas del mismo usuario y bloque | Implementado | Doble barrera: comprobación dentro de la función transaccional e índice único parcial `reservations_one_active_per_user_block_idx` | `test:concurrency` escenario 3: **10 solicitudes simultáneas del mismo usuario → 1 reserva** |
 | REQ-14 | Mis reservas vigentes e historial, en secciones separadas | Implementado | `MisReservasPage` con dos pestañas accesibles (`role="tab"`). «Pasada» no se almacena: se deriva de `ends_at < now()`, de modo que no hay estados obsoletos | `reservationRules.test.ts` › `separarReservas` (4 casos) |
 | REQ-15 | Cancelar reserva propia con 2 horas de anticipación, liberando el cupo | Implementado | `cancel_reservation()`; la UI deshabilita el botón y explica el motivo | `30_cancellations.sql` › «reglas de cancelación del usuario»; `test:concurrency` escenario 4 |
@@ -58,10 +58,13 @@ solicitud (igual que PostgREST en Supabase):
 1) Último cupo con 2 usuarios simultáneos (capacidad 1)
    ✔ exactamente 1 reserva creada
    ✔ el otro recibe "sin_cupos"
-2) 100 solicitudes concurrentes sobre capacidad 20
+2) 92 solicitudes concurrentes sobre capacidad 20
    ✔ reservas vigentes = 20 · cero sobrecupos
-   ✔ 80 rechazos por "sin_cupos" · cero duplicados · cero errores inesperados
+   ✔ 72 rechazos por "sin_cupos" · cero duplicados · cero errores inesperados
    ✔ 20 registros de auditoría
+   (92 porque el PostgreSQL local admitía 92 conexiones más; la
+    verificación automática lo arranca con max_connections=200 y corre
+    las 100 del requisito)
 3) El mismo usuario lanzando 10 solicitudes simultáneas
    ✔ una sola reserva vigente · 9 respuestas marcadas como duplicadas
 4) Carrera por el cupo liberado tras una cancelación
@@ -104,7 +107,7 @@ solicitud (igual que PostgREST en Supabase):
 | Req | Descripción | Estado | Dónde está | Verificación |
 |---|---|---|---|---|
 | REQ-28 | Crear, actualizar y eliminar los recintos a cargo | Implementado | `admin_create_facility()` (crea y autoasigna de forma atómica); edición por RLS. La baja es **lógica** (`active = false`) para preservar el historial de reservas | `40_rls.sql` › «no puede editar un recinto ajeno»; `mockRepository.test.ts` › «administración» |
-| REQ-29 | Asignación de administradores a recintos | Implementado | `facility_admin_assignments` acota a cada administrador a sus recintos, y `is_facility_admin` es el único punto por el que pasan todas las políticas RLS y las funciones del panel. El rol `administrador_general` lo gestiona desde la pestaña «Administradores»: concede el rol de administrador de recintos a una cuenta existente y le asigna recintos (`admin_general_asignar_administrador`), o se lo retira. Su propio rol **no** se concede desde la aplicación —sólo con `seed-usuarios.sh --administrador-general`— para que una cuenta comprometida no pueda crear más | `90_administrador_general.sql` (5 escenarios, la mitad comprobando lo que **no** puede hacer); `mockRepository.test.ts` › «administrador general (REQ-29)» (6 casos) |
+| REQ-29 | Asignación de administradores a recintos | Implementado | `facility_admin_assignments` acota a cada administrador a sus recintos, y `is_facility_admin` es el único punto por el que pasan todas las políticas RLS y las funciones del panel. El rol `administrador_general` lo gestiona desde la pestaña «Administradores»: concede el rol de administrador de recintos y le asigna recintos (`admin_general_asignar_administrador`), o se lo retira. Si ese correo todavía no tiene cuenta, el backend responde `sin_cuenta` y el panel ofrece **crearla**: lo hace la Edge Function `crear-administrador`, que comprueba el rol contra la base y crea la cuenta **sin contraseña** —la persona la define por «Olvidé mi contraseña»— de modo que ninguna credencial viaja. Su propio rol **no** se concede desde la aplicación —sólo con `seed-usuarios.sh --administrador-general`— para que una cuenta comprometida no pueda crear más | `90_administrador_general.sql` (5 escenarios, la mitad comprobando lo que **no** puede hacer); `mockRepository.test.ts` › «administrador general (REQ-29)» (6 casos) |
 | REQ-30 | Definir y modificar bloques horarios y la capacidad máxima | Implementado | `BloquesSeccion` para el bloque suelto y `SerieBloquesForm` para publicar una temporada entera: `admin_create_block_series` acepta un rango de fechas, varias horas de inicio y días de la semana, interpreta las horas en hora local de Santiago, exige una vista previa antes de escribir y es idempotente (repetirla no duplica); `admin_deactivate_block_series` retira la serie sin cancelar las reservas confirmadas y las informa. Privilegios de columna + RLS sobre `time_blocks`; índice único que impide dos bloques activos con el mismo inicio en un recinto | `60_block_series.sql` (10 escenarios, incluidos hora local, idempotencia y omisión del pasado); `40_rls.sql`; `reservationRules.test.ts` › `validarBloqueHorario` (6 casos) |
 | REQ-31 | Consultar reservas vigentes e históricas por recinto | Implementado | `admin_list_reservations(facility_id, scope)`. Devuelve el **nombre** de quien reservó, nunca su correo ni su teléfono | `40_rls.sql` › «admin_list_reservations expone datos personales» (debe fallar) |
 | REQ-32 | Cancelar reservas de sus recintos, liberando el cupo y notificando | Implementado | `cancel_reservation()` por la vía de administrador: sin ventana de 2 horas, con motivo obligatoriamente registrado en auditoría | `30_cancellations.sql` › «cancelación administrativa y aviso por WhatsApp» |
@@ -116,10 +119,11 @@ solicitud (igual que PostgREST en Supabase):
 
 | Regla | Dónde se garantiza |
 |---|---|
-| No exceder la capacidad máxima del bloque | `create_reservation_strict` con bloqueo de fila. Verificado con 100 solicitudes concurrentes |
+| No exceder la capacidad máxima del bloque | `create_reservation_strict` con bloqueo de fila. Verificado con 100 solicitudes concurrentes en la verificación automática, y con las que admita el servidor en local |
 | Una sola reserva activa por usuario, bloque, fecha y recinto | Comprobación en la función + índice único parcial |
 | Sólo administradores asignados gestionan recintos, bloques y capacidades | RLS con `is_facility_admin()` en todas las políticas de escritura |
 | Cancelaciones con 2 horas de anticipación mínima | `cancel_reservation`, camino de dueño |
+| Sólo el administrador general crea cuentas de administrador y les asigna recintos | `prevent_profile_privilege_escalation` bloquea cualquier otro camino, incluida una escritura directa; `admin_general_asignar_administrador` vuelve a comprobar el rol; crear la cuenta lo hace la Edge Function `crear-administrador`, que verifica el rol contra la base antes de usar la clave de servicio |
 | Sólo el dueño o el administrador del recinto cancelan; el administrador sin ventana | `cancel_reservation` decide por el rol real del solicitante |
 | WhatsApp requiere consentimiento y número válido | Restricción de tabla, `claim_notification_jobs` filtra por consentimiento, y el worker revalida E.164 |
 | La conexión con Calendar es voluntaria y desconectarla no afecta la reserva | `google-calendar-disconnect` sólo toca `calendar_sync_status`; nunca `status` |
@@ -134,7 +138,7 @@ solicitud (igual que PostgREST en Supabase):
 
 | Requisito | Cómo se aborda | Evidencia |
 |---|---|---|
-| Elasticidad: 100 usuarios concurrentes sin degradar ni generar sobrecupos | Bloqueo por fila (no por tabla), índices sobre `block_id` y `next_attempt_at`, colas con `SKIP LOCKED` | `test:concurrency`: 100 solicitudes resueltas en ~800 ms, 0 sobrecupos |
+| Elasticidad: 100 usuarios concurrentes sin degradar ni generar sobrecupos | Bloqueo por fila (no por tabla), índices sobre `block_id` y `next_attempt_at`, colas con `SKIP LOCKED` | `test:concurrency`: 92 solicitudes resueltas en 655 ms en local y 100 en la verificación automática, 0 sobrecupos. Cada solicitud simultánea abre una conexión, así que la prueba usa las que el servidor admita y avisa si fueron menos de 100 |
 | Seguridad: contraseñas cifradas, HTTPS/TLS, llaves y tokens sólo en backend, mínimo privilegio | Supabase Auth gestiona las contraseñas; CloudFront fuerza HTTPS; tokens cifrados con AES-256-GCM y columnas sin privilegio de lectura; `REVOKE ALL` y concesiones explícitas por columna | `docs/SEGURIDAD.md`; `10_schema.sql` › «ninguna función de public es ejecutable por anon» |
 | Interoperabilidad: APIs oficiales REST/OAuth 2.0, ≥95 % de éxito | Clientes propios contra las APIs oficiales, con clasificación de errores transitorios y reintentos con retroceso | `googleCalendar.test.ts`, `twilioWhatsapp.test.ts` (58 casos combinados) |
 | Disponibilidad ≥99 % | Supabase gestionado + CloudFront; las integraciones degradan sin afectar la reserva | `docs/OPERACION.md` (monitoreo y recuperación) |
@@ -151,7 +155,7 @@ solicitud (igual que PostgREST en Supabase):
 | Guía de uso para usuarios y administradores | `docs/GUIA_USUARIO.md`, `docs/GUIA_ADMINISTRADOR.md` |
 | Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) y por una prueba equivalente sobre las plantillas de WhatsApp |
 | Linter configurado en el repositorio | ESLint con configuración plana sobre `src/`, `supabase/functions/` y `scripts/`. **La configuración anterior sólo declaraba `files: ["**/*.js"]`, por lo que no revisaba ningún archivo del proyecto**; se corrigió |
-| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 256 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
+| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 270 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
 
 ---
 
@@ -236,8 +240,21 @@ confirmar.
 La selección se **deriva** de la URL en lugar de escribirse desde un
 efecto: así no hay un render intermedio con el diálogo cerrado.
 
+La solicitud dice «el inicio de sesión **o registro**», así que el destino
+acompaña a la persona por toda la cadena y no sólo por el inicio de
+sesión: `/login` → «crear una cuenta» → `/registro` → el código de
+confirmación → el bloque. Antes el enlace a registro perdía el destino y
+quien no tenía cuenta acababa igualmente en el catálogo genérico, que es
+precisamente el paso que la solicitud quería evitar.
+
+Un único sitio decide si un destino es aceptable (`src/lib/destino.ts`):
+sólo rutas internas. Una ruta que empiece por `//` la resuelve el
+navegador como otro sitio, de modo que se descarta aunque hoy el valor lo
+escriba sólo la propia aplicación.
+
 *Evidencia:* `block_availability` y los privilegios de `anon` en
-`40_rls.sql` › «disponibilidad pública sin datos personales».
+`40_rls.sql` › «disponibilidad pública sin datos personales»;
+`destino.test.ts` (4 casos, incluidos los que no son rutas internas).
 
 ### SC-2 · Aviso cuando se libera un cupo
 

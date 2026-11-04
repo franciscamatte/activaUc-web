@@ -8,7 +8,7 @@
 #
 # Dos trabajos en paralelo:
 #
-#   · `cliente`  · lint, typecheck, 245 pruebas con Vitest y build.
+#   · `cliente`  · lint, typecheck, 270 pruebas con Vitest y build.
 #   · `base`     · las 10 suites SQL contra un PostgreSQL de verdad,
 #                  aplicando las migraciones en orden sobre una base
 #                  vacía. Eso verifica además que `supabase db push`
@@ -82,23 +82,30 @@ jobs:
     name: Base de datos (migraciones y suites SQL)
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        # Sin esto el trabajo arranca antes de que PostgreSQL acepte
-        # conexiones y la primera migración falla por carrera.
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
+
+      # PostgreSQL se levanta a mano y no con `services:` porque hay que
+      # pasarle `-c max_connections=200`, y un servicio no admite
+      # argumentos para el proceso del contenedor. Las 100 solicitudes
+      # simultáneas del requisito de elasticidad abren 100 conexiones, y
+      # con el valor por omisión (100) no caben.
+      - name: PostgreSQL 16 con sitio para 100 conexiones simultáneas
+        run: |
+          docker run -d --name activauc-pg -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 postgres:16 -c max_connections=200
+          # Esperar a que acepte conexiones: sin esto la primera
+          # migración falla por carrera.
+          for intento in $(seq 1 40); do
+            if docker exec activauc-pg pg_isready -U postgres -q; then
+              echo "PostgreSQL listo en el intento $intento"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL no llegó a aceptar conexiones" >&2
+          docker logs activauc-pg >&2
+          exit 1
 
       - uses: actions/setup-node@v4
         with:
@@ -112,7 +119,7 @@ jobs:
           ACTIVAUC_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run test:db
 
-      - name: Concurrencia (sin sobrecupo con 100 solicitudes)
+      - name: Concurrencia (100 solicitudes simultáneas, sin sobrecupo)
         env:
           ACTIVAUC_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run test:concurrency

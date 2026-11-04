@@ -125,8 +125,8 @@ src/
 
 supabase/
   migrations/    Esquema, funciones, RLS, Realtime, series, despacho, canal de correo,
-                 rol general y avisos de cupo (10 migraciones ordenadas)
-  functions/     7 Edge Functions + módulos compartidos en _shared/
+                 rol general y avisos de cupo (11 migraciones ordenadas)
+  functions/     8 Edge Functions + módulos compartidos en _shared/
   tests/         Pruebas SQL de esquema, reservas, cancelaciones, RLS e integraciones
   cron/          Programación de tareas con pg_cron (se ejecuta una vez por entorno)
   seed.sql       Datos de ejemplo para desarrollo

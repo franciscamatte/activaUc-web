@@ -21,19 +21,22 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**256 pruebas en 9 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**270 pruebas en 11 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
 |---|---|---|
-| `src/domain/reservationRules.test.ts` | 34 | Selección de bloques, ventana de 2 h de cancelación (incluido el límite exacto), exención del administrador, regla del recordatorio, separación vigentes/pasadas, filtro por rango horario con zona horaria, validación de bloques |
-| `src/domain/phone.test.ts` | 20 | Formato E.164, normalización, mensajes de ayuda en español, enmascarado |
-| `src/lib/errors.test.ts` | 21 | Traducción de cada error de Supabase y PostgreSQL, clasificación (sesión expirada, sin conexión, permisos, límite), y que ningún mensaje contenga palabras en inglés |
-| `src/lib/retry.test.ts` | 10 | Retroceso exponencial con fluctuación, tope máximo, qué errores se reintentan y cuáles no, cancelación por señal |
-| `src/data/mockRepository.test.ts` | 47 | Recorrido completo: registro, sesión, perfil, consentimiento, filtros, reservar, duplicados, agotamiento, cancelaciones y administración |
+| `src/data/mockRepository.test.ts` | 81 | Recorrido completo: registro, sesión, perfil, consentimiento, filtros, reservar, duplicados, agotamiento, cancelaciones, administración, avisos de cupo y administrador general (incluida la creación de cuentas) |
+| `src/test/twilioWhatsapp.test.ts` | 40 | Envío con plantilla y con texto libre, validación de destino, códigos de error, **validación de la firma del webhook**, plantillas en español |
+| `src/domain/reservationRules.test.ts` | 35 | Selección de bloques, ventana de 2 h de cancelación (incluido el límite exacto), exención de los dos roles de administración, regla del recordatorio, separación vigentes/pasadas, filtro por rango horario con zona horaria, validación de bloques |
 | `src/test/oauthCrypto.test.ts` | 24 | Cifrado AES-256-GCM de tokens, detección de manipulación, firma del `state`, intento de suplantación de usuario, id determinístico de evento |
 | `src/test/googleCalendar.test.ts` | 23 | Permisos mínimos, intercambio de código, renovación, idempotencia por `409`, tolerancia a `404`/`410`, clasificación de errores |
-| `src/test/twilioWhatsapp.test.ts` | 35 | Envío con plantilla y con texto libre, validación de destino, códigos de error, **validación de la firma del webhook** (8 casos), plantillas en español |
+| `src/lib/errors.test.ts` | 21 | Traducción de cada error de Supabase y PostgreSQL, clasificación (sesión expirada, sin conexión, permisos, límite), y que ningún mensaje contenga palabras en inglés |
+| `src/domain/phone.test.ts` | 20 | Formato E.164, normalización, mensajes de ayuda en español, enmascarado |
+| `src/lib/retry.test.ts` | 10 | Retroceso exponencial con fluctuación, tope máximo, qué errores se reintentan y cuáles no, cancelación por señal |
+| `src/test/brevoEmail.test.ts` | 10 | Envío por la API HTTP de Brevo, configuración incompleta sin llamar al proveedor, qué respuestas se reintentan y cuáles no |
+| `src/lib/destino.test.ts` | 4 | El bloque elegido sobrevive al inicio de sesión, y nada que no sea una ruta interna llega a la navegación |
+| `src/domain/types.test.ts` | 2 | Los tres roles: quién administra y cómo se nombra cada uno en pantalla |
 
 ### Lo que estas pruebas sí demuestran
 
@@ -167,15 +170,25 @@ juntas, de modo que compiten de verdad por el bloqueo de fila del bloque.
 | # | Escenario | Qué prueba |
 |---|---|---|
 | 1 | Último cupo con 2 usuarios simultáneos (capacidad 1) | Exactamente 1 reserva; el otro recibe `sin_cupos` |
-| 2 | **100 solicitudes concurrentes sobre capacidad 20** | 20 reservas, 80 rechazos, 0 duplicados, 0 errores inesperados, 20 registros de auditoría |
+| 2 | **100 solicitudes concurrentes sobre capacidad 20** (o las que admita el servidor; ver la nota) | 20 reservas, el resto rechazadas, 0 duplicados, 0 errores inesperados, 20 registros de auditoría |
 | 3 | El mismo usuario lanzando 10 solicitudes simultáneas | 1 reserva; 9 respuestas marcadas como duplicadas |
 | 4 | Carrera de 10 aspirantes por el cupo liberado tras una cancelación | 1 gana; quedan 2 filas (1 cancelada + 1 vigente) |
 | 5 | 30 solicitudes sobre un bloque ya agotado | 0 éxitos; las 30 con mensaje legible en español |
 | 6 | Reintento de la misma solicitud (idempotencia) | Siempre la misma reserva; 1 trabajo de Calendar; 2 notificaciones |
 
+### Cuántas conexiones hacen falta
+
+Cada solicitud simultánea abre su propia conexión, así que el escenario 2
+necesita que el servidor deje sitio para 100 más: con `max_connections` en
+100 —el valor por omisión— no caben. El script **detecta cuántas admite**,
+usa esas y avisa cuando fueron menos de 100, en lugar de dar por verificado
+un número que no corrió. La verificación automática arranca PostgreSQL con
+`max_connections=200`, así que allí el escenario sí corre con las 100 que
+pide el requisito.
+
 ### Resultado de la última ejecución
 
-Contra PostgreSQL 16:
+Contra PostgreSQL 16 local, que admitió 92 conexiones simultáneas:
 
 ```
 1) Último cupo con 2 usuarios simultáneos (capacidad 1)
@@ -183,12 +196,12 @@ Contra PostgreSQL 16:
   ✔ el otro recibe "sin_cupos" (obtenido: 1)
   ✔ reservas vigentes = 1, capacidad = 1 (obtenido: 1)
 
-2) 100 solicitudes concurrentes sobre capacidad 20
-  100 solicitudes en 799 ms
+2) 92 solicitudes concurrentes sobre capacidad 20
+  92 solicitudes en 655 ms
   ✔ reservas vigentes = 20 (obtenido: 20)
   ✔ cero sobrecupos
   ✔ 20 solicitudes exitosas (obtenido: 20)
-  ✔ 80 rechazos por "sin_cupos" (obtenido: 80)
+  ✔ 72 rechazos por "sin_cupos" (obtenido: 72)
   ✔ cero usuarios con reserva duplicada (obtenido: 0)
   ✔ cero errores inesperados (obtenido: 0)
   ✔ 20 registros de auditoría (obtenido: 20)
@@ -355,7 +368,7 @@ paralelo:
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, las 256 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, las 270 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la prueba de concurrencia contra un PostgreSQL 16 real |
 
 El trabajo `base` aplica las migraciones en orden sobre una base vacía,

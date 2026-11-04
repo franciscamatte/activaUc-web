@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getRepository } from "../data";
 import type { ActivaRepository } from "../data";
 import type { ConexionCalendario, Perfil } from "../domain/types";
+import { esAdministrador } from "../domain/types";
 import { aAppError } from "../lib/errors";
 import { AuthContext, type EstadoAuth, type FaseSesion } from "./authContext";
 
@@ -143,7 +144,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     calendario,
     cargandoCalendario,
     repositorio,
-    esAdministrador: perfil?.rol === "administrador",
+    esAdministrador: perfil ? esAdministrador(perfil.rol) : false,
 
     registrarse: async (datos) => {
       if (!repositorio) throw aAppError(new Error("Repositorio no disponible."));

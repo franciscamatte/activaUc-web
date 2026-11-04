@@ -33,15 +33,17 @@ avisos por WhatsApp de forma automática cuando cancelas su reserva.
 
 ## Obtener acceso
 
-Nadie se concede el rol a sí mismo: eso es deliberado. El procedimiento
-es siempre el mismo, y el primer paso lo das tú.
+Nadie se concede el rol a sí mismo: eso es deliberado. Lo concede el
+**administrador general** de Deportes UC desde el panel, en la pestaña
+**Administradores**, y hay dos formas según si ya tienes cuenta.
 
-1. Crea tu cuenta normalmente en ActivaUC y confirma tu correo.
-2. Pide al **administrador general** de Deportes UC que te conceda el rol y
-   te asigne tus recintos. Lo hace desde el panel, en la pestaña
-   **Administradores**, con tu correo.
-3. Vuelve a iniciar sesión: aparecerá **Administración** en la barra de
-   navegación.
+**Si ya tienes cuenta en ActivaUC:** pídele que te conceda el rol con tu
+correo y te asigne tus recintos. Vuelve a iniciar sesión y aparecerá
+**Administración** en la barra de navegación.
+
+**Si todavía no tienes cuenta:** el administrador general la crea desde esa
+misma pestaña. Te llegará un correo pidiéndote que definas tu contraseña en
+«Olvidé mi contraseña»; en cuanto la definas, entras y ves el panel.
 
 > Si todavía no existe ningún administrador general, el equipo técnico crea
 > el primero con acceso directo a la base:
@@ -186,11 +188,18 @@ historial completo.
 
 Aquí se concede y se retira el rol de administrador de recintos.
 
-Para habilitar a alguien: la persona **tiene que haberse registrado antes**
-en ActivaUC. Escribes su correo, marcas los recintos a su cargo y pulsas
-«Conceder el rol». Si el correo no corresponde a ninguna cuenta se dice
-explícitamente, en lugar de crear una cuenta con una contraseña que habría
-que comunicarle por un canal que nadie controla.
+Para habilitar a alguien escribes su correo, marcas los recintos a su cargo
+y pulsas «Conceder el rol».
+
+Si ese correo **no tiene cuenta** en ActivaUC, el panel lo dice y entonces te
+pide el nombre de la persona para **crearla ahí mismo**. La cuenta se crea
+**sin contraseña**: le llega un correo pidiéndole que la defina en «Olvidé mi
+contraseña». Es deliberado que funcione así —ninguna contraseña viaja por un
+canal que nadie controla—, y mientras no la defina la cuenta no se puede usar.
+
+> Si el aviso por correo no sale (porque el canal no está configurado, por
+> ejemplo), el panel **te lo dice** en lugar de darlo por enviado: la cuenta
+> queda creada y le avisas tú.
 
 El listado de abajo muestra quién administra qué. «Quitar rol» devuelve la
 cuenta a usuario común y retira sus asignaciones; **las reservas de los

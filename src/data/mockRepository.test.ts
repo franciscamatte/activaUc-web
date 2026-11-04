@@ -1112,4 +1112,124 @@ describe("administrador general (REQ-29)", () => {
     expect(asignables.length).toBeGreaterThan(0);
     expect(propios.length).toBe(asignables.length);
   });
+
+  it("el panel de reservas le responde aunque no tenga asignaciones", async () => {
+    // El alcance por rol tiene que llegar hasta el panel: si el listado
+    // se filtrara por asignaciones, devolvería cero filas sin error, que
+    // es la forma más silenciosa de fallar.
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    const delAdmin = await repo.listarReservasAdmin(null, "todas");
+
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const delGeneral = await repo.listarReservasAdmin(null, "todas");
+
+    expect(delAdmin.length).toBeGreaterThan(0);
+    expect(delGeneral.length).toBeGreaterThanOrEqual(delAdmin.length);
+  });
+
+  it("puede operar sobre un recinto que no tiene asignado", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    // Ninguna de estas operaciones debe rechazarse por permisos.
+    await expect(
+      repo.actualizarRecinto(recintos[0].id, { descripcion: "Actualizado" }),
+    ).resolves.toBeUndefined();
+
+    const manana = new Date(Date.now() + 36 * 60 * 60 * 1000);
+    manana.setMinutes(0, 0, 0);
+    const fin = new Date(manana.getTime() + 60 * 60 * 1000);
+
+    await expect(
+      repo.crearBloque({
+        recintoId: recintos[0].id,
+        inicio: manana.toISOString(),
+        fin: fin.toISOString(),
+        capacidadMaxima: 4,
+        activo: true,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("crea la cuenta cuando el correo no tiene ninguna, y concede el rol", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    // Primero el camino corriente, que debe fallar con un código y no
+    // sólo con un texto: el panel decide por el código.
+    const sinCuenta = await repo.asignarAdministrador("nueva.admin@uc.cl", [recintos[0].id]);
+    expect(sinCuenta.ok).toBe(false);
+    expect(sinCuenta.codigo).toBe("sin_cuenta");
+
+    const r = await repo.crearAdministrador({
+      correo: "nueva.admin@uc.cl",
+      nombre: "Persona Nueva",
+      recintoIds: [recintos[0].id],
+    });
+
+    expect(r.ok).toBe(true);
+    expect(r.cuentaCreada).toBe(true);
+    // En demostración no hay proveedor de correo, y eso se informa en
+    // lugar de darlo por enviado.
+    expect(r.correoEnviado).toBe(false);
+
+    const lista = await repo.listarAdministradores();
+    expect(lista.find((a) => a.correo === "nueva.admin@uc.cl")?.rol).toBe("administrador");
+  });
+
+  it("la cuenta creada no queda con una contraseña utilizable", async () => {
+    // Ninguna contraseña viaja al crear la cuenta: la persona la define
+    // por «Olvidé mi contraseña». Si quedara una, sería un secreto que
+    // nadie eligió.
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+    await repo.crearAdministrador({
+      correo: "nueva.admin@uc.cl",
+      nombre: "Persona Nueva",
+      recintoIds: [recintos[0].id],
+    });
+
+    await expect(repo.iniciarSesion("nueva.admin@uc.cl", "")).rejects.toThrow();
+    await expect(repo.iniciarSesion("nueva.admin@uc.cl", CLAVE)).rejects.toThrow();
+  });
+
+  it("si la cuenta ya existe no se crea otra: sólo se asigna", async () => {
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const recintos = await repo.listarRecintosAsignables();
+
+    const r = await repo.crearAdministrador({
+      correo: CORREO,
+      nombre: "Camila Rojas",
+      recintoIds: [recintos[0].id],
+    });
+
+    expect(r.ok).toBe(true);
+    expect(r.cuentaCreada).toBe(false);
+  });
+
+  it("nadie más puede crear cuentas de administrador", async () => {
+    const intento = {
+      correo: "otra.admin@uc.cl",
+      nombre: "Otra Persona",
+      recintoIds: [] as string[],
+    };
+
+    await repo.iniciarSesion(CORREO, CLAVE);
+    await expect(repo.crearAdministrador(intento)).rejects.toThrow(/administrador general/i);
+
+    await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
+    await expect(repo.crearAdministrador(intento)).rejects.toThrow(/administrador general/i);
+  });
+
+  it("cancela la reserva de otra persona sin la ventana de 2 horas", async () => {
+    // El backend exime a los dos roles de administración; si la interfaz
+    // predijera lo contrario, el botón saldría deshabilitado sin motivo.
+    await repo.iniciarSesion(CORREO_GENERAL, CLAVE);
+    const reservas = await repo.listarReservasAdmin(null, "vigentes");
+    const objetivo = reservas[0];
+
+    const r = await repo.cancelarReserva(objetivo.id, "Mantención de cancha");
+
+    expect(r.ok).toBe(true);
+  });
 });

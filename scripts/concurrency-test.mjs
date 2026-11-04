@@ -11,6 +11,14 @@
 // Escenarios:
 //   1. Último cupo con 2 usuarios simultáneos
 //   2. 100 solicitudes concurrentes sobre un bloque de capacidad 20
+//
+// Cada solicitud simultánea necesita su propia conexión, así que el
+// escenario 2 necesita que `max_connections` del servidor deje sitio
+// para 100 más. Con el valor por omisión (100) no caben: el script lo
+// detecta, usa las que haya y **lo dice**, en lugar de dar por
+// verificadas 100 cuando fueron menos. En la verificación automática el
+// servicio de PostgreSQL arranca con `max_connections=200`, así que
+// allí el escenario corre con las 100 que pide el requisito.
 //   3. El mismo usuario intentando duplicar su reserva 10 veces a la vez
 //   4. Cancelación y nueva reserva concurrente sobre el cupo liberado
 //   5. Bloque agotado bajo carga
@@ -21,6 +29,7 @@
 
 import {
   conectar,
+  conexionesDisponibles,
   prepararBaseDesechable,
   urlServidor,
   verificarServidor,
@@ -30,8 +39,16 @@ const COLOR = process.stdout.isTTY && !process.env.NO_COLOR;
 const verde = (s) => (COLOR ? `\u001b[32m${s}\u001b[0m` : s);
 const rojo = (s) => (COLOR ? `\u001b[31m${s}\u001b[0m` : s);
 const gris = (s) => (COLOR ? `\u001b[90m${s}\u001b[0m` : s);
+const amarillo = (s) => (COLOR ? `\u001b[33m${s}\u001b[0m` : s);
+
+/** Solicitudes simultáneas que pide el requisito no funcional. */
+const OBJETIVO = 100;
+/** Por debajo de esto el escenario no demuestra nada y se aborta. */
+const MINIMO = 20;
 
 let fallos = 0;
+/** Solicitudes simultáneas que el escenario 2 pudo abrir de verdad. */
+let simultaneasUsadas = 0;
 
 function comprobar(condicion, mensaje) {
   if (condicion) {
@@ -170,9 +187,9 @@ async function escenarioUltimoCupo(base) {
 // ---------------------------------------------------------------------
 // Escenario 2 · 100 solicitudes concurrentes
 // ---------------------------------------------------------------------
-async function escenarioCien(base) {
+async function escenarioCien(base, USUARIOS) {
   const CAPACIDAD = 20;
-  const USUARIOS = 100;
+  simultaneasUsadas = USUARIOS;
   console.log(`\n2) ${USUARIOS} solicitudes concurrentes sobre capacidad ${CAPACIDAD}`);
 
   const { blockId } = await crearBloque(base.client, {
@@ -430,13 +447,27 @@ async function main() {
   }
   console.log(gris(`  servidor: ${salud.version.split(",")[0]}`));
 
+  // Cuántas solicitudes simultáneas admite este servidor. El requisito
+  // pide 100; si no caben se usan las que haya y se dice al final.
+  const caben = await conexionesDisponibles(urlServidor());
+  const simultaneas = Math.min(OBJETIVO, caben);
+
+  if (simultaneas < MINIMO) {
+    console.error(rojo("\n✖ El servidor no admite suficientes conexiones\n"));
+    console.error(
+      `  Admite ${caben} conexiones nuevas y la prueba necesita al menos ${MINIMO}.` +
+      `\n  Sube max_connections en postgresql.conf y reinicia el servidor.`,
+    );
+    process.exit(2);
+  }
+
   console.log("\nPreparando base de datos desechable…");
   const base = await prepararBaseDesechable({ silencioso: true });
   console.log(gris(`  base: ${base.nombre}`));
 
   try {
     await escenarioUltimoCupo(base);
-    await escenarioCien(base);
+    await escenarioCien(base, simultaneas);
     await escenarioDuplicado(base);
     await escenarioCupoLiberado(base);
     await escenarioAgotado(base);
@@ -450,7 +481,22 @@ async function main() {
     console.log(rojo(`✖ ${fallos} comprobaciones fallidas`));
     process.exit(1);
   }
-  console.log(verde("✔ Todas las comprobaciones de concurrencia superadas: cero sobrecupos, cero duplicados"));
+  console.log(
+    verde(
+      `✔ Todas las comprobaciones de concurrencia superadas con ${simultaneasUsadas} ` +
+      `solicitudes simultáneas: cero sobrecupos, cero duplicados`,
+    ),
+  );
+  if (simultaneasUsadas < OBJETIVO) {
+    console.log(
+      amarillo(
+        `\n⚠ El requisito pide ${OBJETIVO} solicitudes simultáneas y este servidor ` +
+        `sólo admitió ${simultaneasUsadas}, así que el escenario 2 no quedó ` +
+        `verificado a ${OBJETIVO}. Para verificarlo hace falta max_connections ≥ ` +
+        `${OBJETIVO + 20}; la verificación automática arranca PostgreSQL con 200.`,
+      ),
+    );
+  }
 }
 
 main().catch((error) => {

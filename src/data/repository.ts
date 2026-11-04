@@ -21,6 +21,7 @@ import type {
   Perfil,
   Recinto,
   RecintoAsignable,
+  ResultadoCrearAdministrador,
   Reserva,
   ReservaAdmin,
   ResultadoCancelacion,
@@ -179,10 +180,25 @@ export interface ActivaRepository {
    */
   listarAdministradores(): Promise<AdministradorListado[]>;
   listarRecintosAsignables(): Promise<RecintoAsignable[]>;
+  /**
+   * `codigo` permite al panel reaccionar sin leer el mensaje: en
+   * particular `sin_cuenta`, que es el caso en que ofrece crearla.
+   */
   asignarAdministrador(
     correo: string,
     recintoIds: string[],
-  ): Promise<{ ok: boolean; mensaje: string }>;
+  ): Promise<{ ok: boolean; mensaje: string; codigo?: string }>;
+  /**
+   * Crea la cuenta y le concede el rol en una sola operación, para el
+   * caso en que la persona todavía no se haya registrado. Crear cuentas
+   * exige privilegios que no pueden estar en el navegador, así que lo
+   * hace la Edge Function `crear-administrador`.
+   */
+  crearAdministrador(datos: {
+    correo: string;
+    nombre: string;
+    recintoIds: string[];
+  }): Promise<ResultadoCrearAdministrador>;
   quitarAdministrador(correo: string): Promise<{ ok: boolean; mensaje: string }>;
 
   // --- Google Calendar ----------------------------------------------

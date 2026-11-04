@@ -266,6 +266,7 @@ El script respeta la verificación de JWT que cada función necesita:
 | `google-oauth-start` | sí | JWT del usuario |
 | `google-oauth-callback` | no | `state` firmado con HMAC, de un solo uso |
 | `google-calendar-disconnect` | sí | JWT del usuario |
+| `crear-administrador` | sí | JWT del usuario, y además comprueba contra la base que sea administrador general |
 | `process-calendar-jobs` | no | `x-cron-secret` o la service role key |
 | `process-notification-jobs` | no | `x-cron-secret` o la service role key |
 | `twilio-status-webhook` | no | Firma `X-Twilio-Signature` |

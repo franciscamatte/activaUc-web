@@ -4,6 +4,7 @@ import { useAuth } from "../state/authContext";
 import { useAsync } from "../state/useAsync";
 import { puedeCancelar, separarReservas } from "../domain/reservationRules";
 import type { Reserva } from "../domain/types";
+import { esAdministrador } from "../domain/types";
 import { formatearFechaHora, formatearRango, tiempoRelativo } from "../lib/format";
 import { aAppError } from "../lib/errors";
 import Alerta from "../components/ui/Alerta";
@@ -213,7 +214,7 @@ export default function MisReservasPage() {
                   {reserva.estado === "cancelada" ? (
                     <p className="mt-3 text-xs text-slate-600">
                       Cancelada el {formatearFechaHora(reserva.canceladaEn ?? reserva.inicio)}
-                      {reserva.canceladaPorRol === "administrador"
+                      {reserva.canceladaPorRol && esAdministrador(reserva.canceladaPorRol)
                         ? " por la administración del recinto"
                         : " por ti"}
                       {reserva.motivoCancelacion ? ` · Motivo: ${reserva.motivoCancelacion}` : ""}.

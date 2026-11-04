@@ -40,8 +40,39 @@ export function urlConBase(url, nombreBase) {
 
 export async function conectar(url) {
   const client = new Client({ connectionString: url, application_name: "activauc-tests" });
+  // Sin este oyente, una conexión que el servidor corta —cosa que hace
+  // la propia limpieza al borrar la base desechable— emite un 'error'
+  // sin manejar y tumba el proceso con una traza de pg, ocultando el
+  // fallo original. Aquí se recuerda y se sigue.
+  client.on("error", (error) => {
+    client.activaucErrorDeConexion = error;
+  });
   await client.connect();
   return client;
+}
+
+/**
+ * Cuántas conexiones nuevas admite el servidor ahora mismo.
+ *
+ * La prueba de concurrencia abre una conexión por solicitud simultánea,
+ * así que el techo del servidor es un límite real: con
+ * `max_connections` en 100 —el valor por omisión— no caben 100
+ * solicitudes más la conexión de control. Saberlo antes permite decirlo
+ * en lugar de fallar con un error de pg a media prueba.
+ */
+export async function conexionesDisponibles(url) {
+  const client = await conectar(url);
+  try {
+    const { rows } = await client.query(
+      `select current_setting('max_connections')::int as tope,
+              (select count(*) from pg_stat_activity) as en_uso`,
+    );
+    // Se descuenta esta misma conexión y se deja un margen de 2 para no
+    // apurar el último hueco del servidor.
+    return Math.max(0, rows[0].tope - rows[0].en_uso - 2);
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 /** Comprueba que el servidor responde y da un mensaje claro si no. */

@@ -12,6 +12,7 @@
  */
 
 import type { Disponibilidad, Reserva, Rol } from "./types";
+import { esAdministrador } from "./types";
 
 /** Horas mínimas de anticipación para que el usuario cancele (REQ-15). */
 export const HORAS_MINIMAS_CANCELACION = 2;
@@ -73,7 +74,10 @@ export function puedeCancelar(
     return { permitido: false, motivo: "Esta reserva ya finalizó." };
   }
 
-  if (comoRol === "administrador") {
+  // Vale tanto para el administrador de recintos como para el general:
+  // la función del backend exime a los dos, y si aquí se predijera otra
+  // cosa el botón aparecería deshabilitado sin motivo.
+  if (esAdministrador(comoRol)) {
     return PERMITIDO;
   }
 

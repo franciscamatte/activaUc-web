@@ -24,6 +24,22 @@ export interface AdministradorListado {
   recintos: string[];
 }
 
+/**
+ * Resultado de crear la cuenta de un administrador (REQ-29).
+ *
+ * `correoEnviado` se informa aparte a propósito: la cuenta puede quedar
+ * creada aunque el aviso no salga, y el panel tiene que poder decir «la
+ * cuenta está, avísale tú» en lugar de dar por enviado un correo que no
+ * salió.
+ */
+export interface ResultadoCrearAdministrador {
+  ok: boolean;
+  mensaje: string;
+  cuentaCreada: boolean;
+  correoEnviado: boolean;
+  motivoCorreo?: string;
+}
+
 /** Recinto tal como lo ve el administrador general al asignar. */
 export interface RecintoAsignable {
   id: string;
@@ -34,6 +50,23 @@ export interface RecintoAsignable {
 /** Un administrador general también administra, con más alcance. */
 export function esAdministrador(rol: Rol): boolean {
   return rol === "administrador" || rol === "administrador_general";
+}
+
+/**
+ * Cómo se nombra cada rol en pantalla. Está aquí y no en la barra de
+ * navegación porque lo necesitan varias pantallas, y porque añadir un
+ * rol sin añadir su nombre dejaría a alguien viendo «Sesión activa» en
+ * lugar de lo que es.
+ */
+export function etiquetaRol(rol: Rol): string {
+  switch (rol) {
+    case "administrador_general":
+      return "Administradora/or general";
+    case "administrador":
+      return "Administradora/or de recintos";
+    default:
+      return "Sesión activa";
+  }
 }
 
 /** Estado almacenado. "pasada" no se guarda: se deriva del tiempo. */

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
 import { aAppError } from "../lib/errors";
+import { destinoSeguro } from "../lib/destino";
 import type { TipoVerificacion } from "../data/repository";
 import {
   MENSAJE_CODIGO_INVALIDO,
@@ -38,7 +39,12 @@ export default function VerificarCodigoPage() {
   const estado = (ubicacion.state ?? {}) as {
     desdeLogin?: boolean;
     recienEnviado?: boolean;
+    destino?: string;
   };
+
+  // Confirmar el alta deja la sesión abierta, así que se puede volver
+  // directamente al bloque que la persona quería reservar.
+  const destino = destinoSeguro(estado.destino);
 
   const tipo: TipoVerificacion =
     parametros.get("tipo") === "recuperacion" ? "recuperacion" : "registro";
@@ -65,7 +71,7 @@ export default function VerificarCodigoPage() {
       await verificarCodigo({ correo, codigo: limpio, tipo });
       // Confirmar el alta deja la sesión abierta; recuperar la deja
       // abierta sólo para definir la contraseña nueva.
-      navegar(tipo === "registro" ? "/catalogo" : "/restablecer-contrasena", {
+      navegar(tipo === "registro" ? destino : "/restablecer-contrasena", {
         replace: true,
       });
     } catch (e) {
@@ -171,7 +177,11 @@ export default function VerificarCodigoPage() {
         ) : null}
 
         <p className="text-center text-sm text-slate-600">
-          <Link to="/login" className="font-medium text-emerald-800 hover:underline">
+          <Link
+            to="/login"
+            state={{ destino }}
+            className="font-medium text-emerald-800 hover:underline"
+          >
             Volver al inicio de sesión
           </Link>
         </p>

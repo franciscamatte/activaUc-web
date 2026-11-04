@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/authContext";
+import { etiquetaRol } from "../domain/types";
 import Boton from "./ui/Boton";
 
 /**
@@ -87,7 +88,7 @@ export default function Navbar() {
               <span className="text-right text-sm leading-tight">
                 <span className="block font-medium text-slate-900">{perfil.nombre}</span>
                 <span className="block text-xs text-slate-500">
-                  {perfil.rol === "administrador" ? "Administradora/or de recintos" : "Sesión activa"}
+                  {etiquetaRol(perfil.rol)}
                 </span>
               </span>
               <Boton
@@ -148,9 +149,7 @@ export default function Navbar() {
                   <p className="px-3 text-sm">
                     <span className="block font-medium text-slate-900">{perfil.nombre}</span>
                     <span className="block text-xs text-slate-500">
-                      {perfil.rol === "administrador"
-                        ? "Administradora/or de recintos"
-                        : "Sesión activa"}
+                      {etiquetaRol(perfil.rol)}
                     </span>
                   </p>
                   <Boton

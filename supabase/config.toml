@@ -94,6 +94,12 @@ verify_jwt = false
 [functions.google-calendar-disconnect]
 verify_jwt = true
 
+# Crea la cuenta de un administrador de recintos. Exige JWT: la
+# funcion comprueba ademas, contra la base, que quien llama sea
+# administrador general.
+[functions.crear-administrador]
+verify_jwt = true
+
 [functions.process-calendar-jobs]
 verify_jwt = false
 

@@ -322,17 +322,20 @@ jobs:
 
   pruebas-de-base-de-datos:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready --health-interval 10s
-          --health-timeout 5s --health-retries 5
-        ports: ["5432:5432"]
     steps:
       - uses: actions/checkout@v4
+      # PostgreSQL se levanta a mano porque la prueba de concurrencia
+      # necesita max_connections=200 y un `services:` no admite
+      # argumentos para el proceso del contenedor.
+      - name: PostgreSQL 16
+        run: |
+          docker run -d --name pg -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 postgres:16 -c max_connections=200
+          for i in $(seq 1 40); do
+            docker exec pg pg_isready -U postgres -q && exit 0
+            sleep 2
+          done
+          exit 1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

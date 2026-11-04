@@ -27,6 +27,18 @@ const esMd = (n) => n.endsWith(".md");
 const esSh = (n) => n.endsWith(".sh");
 
 const migraciones = listar("supabase/migrations", esSql);
+// Los archivos de prueba del cliente están repartidos por src/, así que
+// se recorre el árbol en lugar de un único directorio.
+function listarRecursivo(dir, filtro, acumulado = []) {
+  if (!existsSync(dir)) return acumulado;
+  for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+    const ruta = join(dir, entrada.name);
+    if (entrada.isDirectory()) listarRecursivo(ruta, filtro, acumulado);
+    else if (filtro(entrada.name)) acumulado.push(ruta.split("\\").join("/"));
+  }
+  return acumulado;
+}
+const pruebasCliente = listarRecursivo("src", (n) => n.endsWith(".test.ts"));
 // Las suites de prueba empiezan por un número; 00_ es el arranque, no
 // una suite.
 const suites = listar("supabase/tests", (n) => esSql(n) && !n.startsWith("00_"));
@@ -46,6 +58,7 @@ const real = {
   documentos: docs.length,
   scripts: scripts.length,
   funciones: funciones.length,
+  pruebasCliente: pruebasCliente.length,
   tablas: contar(todasLasMigraciones, /create table if not exists public\./g),
   enumeraciones: contar(esquema, /create type public\./g),
 };
@@ -79,6 +92,22 @@ comprobar("suites SQL", real.suites, /(\d+) archivos? (?:de prueba|SQL)/g);
 comprobar("tablas", real.tablas, /(?:Las |son )?(\d+) tablas/g);
 comprobar("documentos", real.documentos, /(\d+) documentos/g);
 comprobar("enumeraciones", real.enumeraciones, /(\d+) enumeraciones/g);
+comprobar("Edge Functions", real.funciones, /(\d+) Edge Functions/g);
+// El número de pruebas no se puede deducir leyendo (hay casos generados
+// en bucle), pero el de archivos sí, y es el que se queda atrás cuando
+// se añade uno.
+comprobar("archivos de Vitest", real.pruebasCliente, /pruebas en (\d+) archivos/g);
+
+// Todo archivo de prueba del cliente debe estar en la tabla de PRUEBAS.md,
+// que es donde se dice qué cubre cada uno.
+{
+  const pruebasMd = leer("docs/PRUEBAS.md");
+  for (const p of pruebasCliente) {
+    if (!pruebasMd.includes(p)) {
+      problemas.push(`archivo de prueba sin citar en PRUEBAS.md: ${p}`);
+    }
+  }
+}
 
 // Toda migración debe estar citada en el informe, y al revés.
 const informe = leer("docs/INFORME_ENTREGA.md");

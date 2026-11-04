@@ -152,9 +152,11 @@ simultáneas leerían «quedan 1 cupo» a la vez y las dos insertarían.
 *vigente* de la misma persona en el mismo bloque. Si la lógica falla, la
 base rechaza la fila.
 
-La prueba de concurrencia (`scripts/concurrency-test.mjs`) lanza 100
+La prueba de concurrencia (`scripts/concurrency-test.mjs`) lanza hasta 100
 intentos simultáneos contra un bloque de capacidad 20 y exige exactamente
-20 reservas, 0 sobrecupos y 0 duplicados.
+20 reservas, 0 sobrecupos y 0 duplicados. Cada intento abre su propia
+conexión, así que usa las que el servidor admita y avisa si fueron menos
+de 100.
 
 ---
 

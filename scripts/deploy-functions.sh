@@ -2,7 +2,7 @@
 # =====================================================================
 # ActivaUC · despliegue de Edge Functions
 # ---------------------------------------------------------------------
-# Despliega las siete funciones del backend respetando la verificación
+# Despliega las ocho funciones del backend respetando la verificación
 # de JWT que cada una necesita (definida en supabase/config.toml).
 #
 # Uso:
@@ -44,6 +44,7 @@ declare -A FUNCIONES=(
   [google-oauth-start]=true
   [google-oauth-callback]=false
   [google-calendar-disconnect]=true
+  [crear-administrador]=true
   [process-calendar-jobs]=false
   [process-notification-jobs]=false
   [twilio-status-webhook]=false

@@ -155,6 +155,17 @@ describe("puedeCancelar", () => {
     expect(puedeCancelar(inmediata, "administrador", AHORA).permitido).toBe(true);
   });
 
+  it("exime igualmente al administrador general (REQ-29)", () => {
+    // La función del backend exime a los dos roles de administración.
+    // Si aquí se predijera otra cosa, el botón aparecería deshabilitado
+    // para quien sí puede cancelar.
+    const inmediata = reserva({ inicio: enHoras(0.25), fin: enHoras(1.25) });
+    expect(puedeCancelar(inmediata, "administrador_general", AHORA).permitido).toBe(true);
+
+    const vencida = reserva({ inicio: enHoras(-3), fin: enHoras(-2) });
+    expect(puedeCancelar(vencida, "administrador_general", AHORA).permitido).toBe(false);
+  });
+
   it("permite al administrador cancelar una reserva ya iniciada pero no terminada", () => {
     const enCurso = reserva({ inicio: enHoras(-0.5), fin: enHoras(0.5) });
     expect(puedeCancelar(enCurso, "administrador", AHORA).permitido).toBe(true);

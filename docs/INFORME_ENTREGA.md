@@ -17,8 +17,11 @@ Lo esencial de lo que cambió:
   tiempos en el servidor.
 - **La concurrencia está resuelta y verificada**, no afirmada:
   `create_reservation_strict` toma un bloqueo de fila sobre el bloque antes de
-  contar. 100 solicitudes simultáneas sobre capacidad 20 producen exactamente
-  20 reservas, cero sobrecupos y cero duplicados.
+  contar. Las solicitudes simultáneas sobre capacidad 20 producen exactamente
+  20 reservas, cero sobrecupos y cero duplicados. Las 100 del requisito corren
+  en la verificación automática, donde PostgreSQL arranca con
+  `max_connections=200`; en un servidor con el valor por omisión la prueba usa
+  las que caben y lo dice.
 - **Las integraciones son reales y viven en el backend.** OAuth 2.0 de Google
   con `state` firmado y tokens cifrados con AES-256-GCM; Twilio invocado sólo
   desde una Edge Function, con webhook de estados autenticado por firma. Ningún
@@ -95,6 +98,7 @@ supabase/functions/_shared/{env,http,crypto,log,supabase,google,twilio,phone,mes
 supabase/functions/google-oauth-start/index.ts
 supabase/functions/google-oauth-callback/index.ts
 supabase/functions/google-calendar-disconnect/index.ts
+supabase/functions/crear-administrador/index.ts
 supabase/functions/process-calendar-jobs/index.ts
 supabase/functions/process-notification-jobs/index.ts
 supabase/functions/twilio-status-webhook/index.ts
@@ -170,7 +174,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 10 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 11 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
@@ -193,6 +197,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261016000800_canal_correo.sql` | 844 | Segundo canal de notificación: consentimiento de correo independiente, `channel` abierto a `email`, encolado por canal y reclamo que resuelve el destino de cada uno |
 | `20261104000900_administrador_general.sql` | 583 | Rol `administrador_general` (REQ-29): amplía `is_admin` e `is_facility_admin`, abre la barrera anti-escalada sólo para la vía sancionada, y añade las funciones de asignar, retirar y listar administradores |
 | `20261104001000_aviso_cupo_liberado.sql` | 388 | Aviso de cupo liberado (SC-2): tabla `block_watchers`, tipo de notificación `cupo_liberado`, `block_id` en la cola, disparador por sentencia sobre las cancelaciones y reclamo que resuelve el horario desde el bloque |
+| `20261104001100_codigo_en_asignacion.sql` | 129 | Un campo `codigo` en cada respuesta de `admin_general_asignar_administrador`, para que la Edge Function `crear-administrador` distinga «ese correo no tiene cuenta» sin decidir por el texto del mensaje. No cambia ninguna regla |
 
 Las 14 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
@@ -213,6 +218,7 @@ distintos por entorno y no deben versionarse.
 | `google-oauth-start` | sí | Firma el `state` y devuelve la URL de autorización. Límite de 5 por minuto |
 | `google-oauth-callback` | no | Verifica la firma, consume el `state` de forma atómica, cifra los tokens y los persiste |
 | `google-calendar-disconnect` | sí | Revoca en Google, borra los tokens y cancela los trabajos pendientes |
+| `crear-administrador` | sí | Crea la cuenta de un administrador de recintos y le asigna sus recintos (REQ-29). Comprueba el rol **contra la base** antes de usar la clave de servicio, crea la cuenta sin contraseña y avisa por correo. Límite de 10 por hora |
 | `process-calendar-jobs` | no | Crea y elimina eventos con reintentos. Renueva el access token solo |
 | `process-notification-jobs` | no | Envía por WhatsApp o por correo, segun el canal del trabajo, validando el consentimiento de ese canal y el formato del destino |
 | `twilio-status-webhook` | no | Actualiza los estados de entrega. Valida firma; idempotente |
@@ -325,7 +331,7 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  256 passed (256)
+     Tests  270 passed (270)
 ```
 
 | Archivo | Pruebas |
@@ -361,9 +367,11 @@ apliquen limpiamente sobre una base vacía.
 
 ```
 1) Último cupo con 2 usuarios simultáneos .......... 1 reserva, 1 "sin_cupos"
-2) 100 solicitudes sobre capacidad 20 ............. 20 reservas en 799 ms
+2) 92 solicitudes sobre capacidad 20 .............. 20 reservas en 655 ms
                                                      0 sobrecupos, 0 duplicados
                                                      0 errores, 20 auditorías
+   (92 y no 100 porque el PostgreSQL local admite 92 conexiones más;
+    la verificación automática lo arranca con max_connections=200)
 3) 10 solicitudes del mismo usuario a la vez ...... 1 reserva, 9 duplicadas
 4) Carrera de 10 por el cupo liberado ............. 1 gana
 5) 30 solicitudes sobre bloque agotado ............ 0 éxitos, 30 mensajes claros
@@ -384,7 +392,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 256 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 270 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de
@@ -546,7 +554,8 @@ requisito.
 | 9 | Apuntar el dominio al alojamiento elegido | [COMPARTIR.md](COMPARTIR.md) § 2.3 o [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 5 |
 | 10 | Dar de alta los recintos, bloques y administradores reales. Para una temporada completa, la publicación en serie del panel | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
 | 11 | **Crear el primer administrador general**: la persona se registra normalmente y después `bash scripts/seed-usuarios.sh --correo <su correo> --administrador-general`. Ese rol no se concede desde la aplicación a propósito, para que una cuenta comprometida no pueda crear más | [GUIA_ADMINISTRADOR.md](GUIA_ADMINISTRADOR.md) |
-| 12 | **Marcar la verificación como obligatoria** en GitHub: Settings → Branches → regla para `main` → Require status checks → `cliente` y `base`. Sin esto la integración continua informa pero no impide fusionar, y § 10 del documento de requerimientos pide que sea antes de integrar | [PRUEBAS.md](PRUEBAS.md) |
+| 12 | **Desplegar las Edge Functions**, incluida `crear-administrador`, que es la que permite al administrador general crear la cuenta de un administrador que todavía no se haya registrado: `supabase functions deploy`. Sin ella el panel sigue concediendo el rol a cuentas existentes, pero no puede crear ninguna | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 7 |
+| 13 | **Marcar la verificación como obligatoria** en GitHub: Settings → Branches → regla para `main` → Require status checks → `cliente` y `base`. Sin esto la integración continua informa pero no impide fusionar, y § 10 del documento de requerimientos pide que sea antes de integrar | [PRUEBAS.md](PRUEBAS.md) |
 
 ---
 

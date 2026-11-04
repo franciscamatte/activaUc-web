@@ -200,3 +200,58 @@ begin
   raise notice 'OK · el listado y la retirada del rol funcionan y están acotados';
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- El código de la respuesta, que es por el que decide la aplicación
+-- ---------------------------------------------------------------------
+-- La Edge Function `crear-administrador` sólo crea la cuenta cuando la
+-- asignación responde `sin_cuenta`. Si ese código cambiara o faltara,
+-- crearía cuentas en casos que no debe, o ninguna: por eso se comprueba
+-- aquí y no sólo el campo `ok`.
+do $$
+declare
+  _general uuid; _usuario uuid; _fac uuid;
+  _r jsonb;
+begin
+  _general := test_helpers.create_user('g7@uc.cl', 'Gabriela Códigos', 'administrador_general');
+  _usuario := test_helpers.create_user('u7@uc.cl', 'Ulises Códigos');
+
+  insert into public.facilities (name, facility_type) values ('Recinto Códigos', 'Fútbol')
+  returning id into _fac;
+
+  -- Sin sesión.
+  perform test_helpers.logout();
+  _r := public.admin_general_asignar_administrador('u7@uc.cl', array[_fac]);
+  assert _r ->> 'codigo' = 'sin_sesion', format('Código inesperado sin sesión: %s', _r);
+
+  -- Sin el rol.
+  perform test_helpers.login_as(_usuario);
+  _r := public.admin_general_asignar_administrador('u7@uc.cl', array[_fac]);
+  assert _r ->> 'codigo' = 'no_autorizado', format('Código inesperado sin rol: %s', _r);
+
+  perform test_helpers.login_as(_general);
+
+  -- El caso que decide si se crea una cuenta.
+  _r := public.admin_general_asignar_administrador('nadie.de.nadie@uc.cl', array[_fac]);
+  assert not (_r ->> 'ok')::boolean, 'Un correo sin cuenta no debería asignarse';
+  assert _r ->> 'codigo' = 'sin_cuenta', format('Código inesperado sin cuenta: %s', _r);
+
+  -- Su propio rol.
+  _r := public.admin_general_asignar_administrador('g7@uc.cl', array[_fac]);
+  assert _r ->> 'codigo' = 'propio_rol', format('Código inesperado en el propio rol: %s', _r);
+
+  -- Un recinto que no existe.
+  _r := public.admin_general_asignar_administrador(
+    'u7@uc.cl', array['00000000-0000-0000-0000-000000000000'::uuid]
+  );
+  assert _r ->> 'codigo' = 'recintos_desconocidos',
+    format('Código inesperado con un recinto inexistente: %s', _r);
+
+  -- Y el camino bueno.
+  _r := public.admin_general_asignar_administrador('u7@uc.cl', array[_fac]);
+  assert (_r ->> 'ok')::boolean, format('La asignación falló: %s', _r);
+  assert _r ->> 'codigo' = 'asignado', format('Código inesperado al asignar: %s', _r);
+
+  raise notice 'OK · cada respuesta de la asignación trae su código';
+end;
+$$;

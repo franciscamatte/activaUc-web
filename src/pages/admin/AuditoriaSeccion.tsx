@@ -3,6 +3,7 @@ import type { ActivaRepository } from "../../data";
 import { useAsync } from "../../state/useAsync";
 import { etiquetaAccionAuditoria } from "../../data/rows";
 import type { EntradaAuditoria, Recinto } from "../../domain/types";
+import { esAdministrador } from "../../domain/types";
 import { formatearFechaHora } from "../../lib/format";
 import Boton from "../../components/ui/Boton";
 import { CampoSelect } from "../../components/ui/Campo";
@@ -114,7 +115,7 @@ export default function AuditoriaSeccion({ repositorio, recintos }: Props) {
                     </Insignia>
                     {entrada.actorRol ? (
                       <span className="text-xs text-slate-500">
-                        {entrada.actorRol === "administrador" ? "Administración" : "Usuario"}
+                        {esAdministrador(entrada.actorRol) ? "Administración" : "Usuario"}
                       </span>
                     ) : (
                       <span className="text-xs text-slate-500">Sistema</span>

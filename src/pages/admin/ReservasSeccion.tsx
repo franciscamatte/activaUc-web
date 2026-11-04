@@ -3,6 +3,7 @@ import type { ActivaRepository } from "../../data";
 import { useAsync } from "../../state/useAsync";
 import { puedeCancelar } from "../../domain/reservationRules";
 import type { Recinto, ReservaAdmin } from "../../domain/types";
+import { esAdministrador } from "../../domain/types";
 import { formatearFechaMedia, formatearHora, tiempoRelativo } from "../../lib/format";
 import { aAppError } from "../../lib/errors";
 import Alerta from "../../components/ui/Alerta";
@@ -172,7 +173,7 @@ export default function ReservasSeccion({ repositorio, recintos }: Props) {
                       <InsigniaReserva estado={reserva.estado} esPasada={reserva.esPasada} />
                       {reserva.estado === "cancelada" ? (
                         <p className="mt-1.5 text-xs text-slate-600">
-                          {reserva.canceladaPorRol === "administrador"
+                          {reserva.canceladaPorRol && esAdministrador(reserva.canceladaPorRol)
                             ? "Por administración"
                             : "Por el usuario"}
                           {reserva.motivoCancelacion ? `: ${reserva.motivoCancelacion}` : ""}
