@@ -1164,8 +1164,12 @@ describe("administrador general (REQ-29)", () => {
       repo.actualizarRecinto(recintos[0].id, { descripcion: "Actualizado" }),
     ).resolves.toBeUndefined();
 
+    // Un minuto que la semilla no usa: sus bloques empiezan siempre en
+    // hora en punto, y el índice de unicidad es por hora exacta de
+    // inicio. Con minutos en cero, la prueba fallaba o no según la hora
+    // a la que se ejecutara.
     const manana = new Date(Date.now() + 36 * 60 * 60 * 1000);
-    manana.setMinutes(0, 0, 0);
+    manana.setMinutes(37, 0, 0);
     const fin = new Date(manana.getTime() + 60 * 60 * 1000);
 
     await expect(
