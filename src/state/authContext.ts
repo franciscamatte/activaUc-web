@@ -22,6 +22,12 @@ export interface EstadoAuth {
   /** Estado de la conexión con Google Calendar del usuario actual. */
   calendario: ConexionCalendario | null;
   cargandoCalendario: boolean;
+  /**
+   * Por qué no se sabe el estado de la conexión, cuando no se sabe.
+   * No es lo mismo que «no conectado»: decir eso sin haber podido
+   * consultar sería afirmar algo que no se comprobó.
+   */
+  errorCalendario: string | null;
 
   repositorio: ActivaRepository | null;
   esAdministrador: boolean;

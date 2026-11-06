@@ -21,7 +21,7 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**271 pruebas en 11 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**276 pruebas en 12 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
@@ -35,6 +35,7 @@ se verifica son reglas e integraciones, no renderizado.
 | `src/domain/phone.test.ts` | 20 | Formato E.164, normalización, mensajes de ayuda en español, enmascarado |
 | `src/lib/retry.test.ts` | 10 | Retroceso exponencial con fluctuación, tope máximo, qué errores se reintentan y cuáles no, cancelación por señal |
 | `src/test/brevoEmail.test.ts` | 10 | Envío por la API HTTP de Brevo, configuración incompleta sin llamar al proveedor, qué respuestas se reintentan y cuáles no |
+| `src/lib/limiteDeTiempo.test.ts` | 5 | Una promesa que no vuelve nunca deja de esperarse, el error original se propaga intacto y no quedan temporizadores sueltos |
 | `src/lib/destino.test.ts` | 4 | El bloque elegido sobrevive al inicio de sesión, y nada que no sea una ruta interna llega a la navegación |
 | `src/domain/types.test.ts` | 2 | Los tres roles: quién administra y cómo se nombra cada uno en pantalla |
 
@@ -368,7 +369,7 @@ paralelo:
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, las 271 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, las 276 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la prueba de concurrencia contra un PostgreSQL 16 real |
 
 El trabajo `base` aplica las migraciones en orden sobre una base vacía,

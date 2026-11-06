@@ -4,6 +4,7 @@ import type { ActivaRepository } from "../data";
 import type { ConexionCalendario, Perfil } from "../domain/types";
 import { esAdministrador } from "../domain/types";
 import { aAppError } from "../lib/errors";
+import { conLimiteDeTiempo } from "../lib/limiteDeTiempo";
 import { AuthContext, type EstadoAuth, type FaseSesion } from "./authContext";
 
 /**
@@ -40,6 +41,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [sesionExpirada, setSesionExpirada] = useState(false);
   const [calendario, setCalendario] = useState<ConexionCalendario | null>(null);
   const [cargandoCalendario, setCargandoCalendario] = useState(false);
+  const [errorCalendario, setErrorCalendario] = useState<string | null>(null);
 
   // Cierre de sesión deliberado: evita mostrar "tu sesión expiró" cuando
   // es el propio usuario quien pulsó el botón.
@@ -76,11 +78,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const cargarCalendario = useCallback(async (repo: ActivaRepository) => {
     setCargandoCalendario(true);
+    setErrorCalendario(null);
     try {
-      setCalendario(await repo.obtenerConexionCalendario());
-    } catch {
-      // El estado de una integración opcional no debe bloquear la app.
+      // Con límite de tiempo: al volver del consentimiento de Google
+      // esta consulta se quedó colgada sin lanzar nada, y la insignia
+      // se quedó en «Consultando…» hasta recargar la página. Una
+      // promesa que no vuelve no se captura con try/catch.
+      const conexion = await conLimiteDeTiempo(
+        repo.obtenerConexionCalendario(),
+        8_000,
+        "consultar tu conexión con Google Calendar",
+      );
+      setCalendario(conexion);
+    } catch (error) {
+      // El estado de una integración opcional no debe bloquear la app,
+      // pero tampoco se puede afirmar «no conectado» sin haberlo
+      // comprobado: se dice que no se sabe y se ofrece reintentar.
       setCalendario(null);
+      setErrorCalendario(aAppError(error, "consultar tu conexión").message);
     } finally {
       setCargandoCalendario(false);
     }
@@ -143,6 +158,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     sesionExpirada,
     calendario,
     cargandoCalendario,
+    errorCalendario,
     repositorio,
     esAdministrador: perfil ? esAdministrador(perfil.rol) : false,
 

@@ -23,7 +23,10 @@ const MOTIVOS_CALENDARIO: Record<string, string> = {
   sin_refresh_token:
     "Google no entregó el permiso prolongado necesario. Vuelve a intentarlo y acepta todos los permisos solicitados.",
   permisos_insuficientes:
-    "Faltó autorizar el permiso de eventos de calendario, que es el mínimo que necesitamos.",
+    "Faltó autorizar el permiso de eventos de calendario, que es el mínimo que " +
+    "necesitamos. En la pantalla de Google hay que marcar la casilla del permiso " +
+    "antes de continuar: si se deja sin marcar, Google aprueba el acceso sin ese " +
+    "permiso y no podemos crear los eventos.",
   no_configurado:
     "La integración con Google Calendar aún no está configurada en el servidor.",
   parametros_incompletos: "La respuesta de Google llegó incompleta. Inténtalo de nuevo.",
@@ -38,6 +41,10 @@ export default function DatosPersonalesPage() {
     fase,
     calendario,
     cargandoCalendario,
+    // La página ya tiene un `errorCalendario` para los fallos de
+    // conectar o desconectar; este es el de no poder consultar el
+    // estado, que es otra cosa.
+    errorCalendario: errorEstadoCalendario,
     repositorio,
     actualizarNombre,
     definirConsentimientoWhatsapp,
@@ -445,6 +452,8 @@ export default function DatosPersonalesPage() {
             <Insignia tono="neutro">Consultando…</Insignia>
           ) : conectado ? (
             <Insignia tono="exito">Conectado</Insignia>
+          ) : errorEstadoCalendario ? (
+            <Insignia tono="aviso">Sin respuesta</Insignia>
           ) : calendario?.estado === "error" ? (
             <Insignia tono="error">Con error</Insignia>
           ) : (
@@ -457,6 +466,22 @@ export default function DatosPersonalesPage() {
           como evento a tu calendario y se eliminará si la cancelas. Desconectarla no
           afecta tus reservas.
         </p>
+
+        {errorEstadoCalendario && !cargandoCalendario ? (
+          <Alerta tono="aviso" titulo="No pudimos consultar tu conexión">
+            {errorEstadoCalendario} Tus reservas no se ven afectadas: esto es sólo el estado
+            de la integración.
+            <div className="mt-3">
+              <Boton
+                variante="secundario"
+                tamano="pequeno"
+                onClick={() => void recargarCalendario()}
+              >
+                Volver a consultar
+              </Boton>
+            </div>
+          </Alerta>
+        ) : null}
 
         {esModoMock ? (
           <Alerta tono="aviso" titulo="No disponible en modo demostración">

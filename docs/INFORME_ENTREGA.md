@@ -332,7 +332,7 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  271 passed (271)
+     Tests  276 passed (276)
 ```
 
 | Archivo | Pruebas |
@@ -393,7 +393,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 271 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 276 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de
@@ -701,3 +701,5 @@ linter, no una inspección a ojo.
 | 8 | Scripts con fin de línea CRLF | `$'\r': command not found`: el despliegue no habría funcionado en Linux ni en CI | Ejecutarlos en WSL |
 | 9 | `.gitignore` sin `.env` | Riesgo de versionar credenciales | Revisión de seguridad |
 | 10 | Estado «enviado» de WhatsApp fijado sin enviar nada | La interfaz habría afirmado que un mensaje salió cuando no existía ningún envío | Revisión de la migración original |
+| 11 | Pruebas que creaban un bloque a una hora fija | Pasaban por la tarde y fallaban de madrugada, según si la hora caía sobre un bloque de la semilla. Lo encontró la primera ejecución real de la verificación automática | Ahora buscan el primer hueco libre |
+| 12 | Consulta del estado de Google Calendar sin límite de tiempo | Al volver del consentimiento la consulta se quedaba colgada sin lanzar nada y la insignia se quedaba en «Consultando…» hasta recargar. Una promesa que no vuelve no se captura con `try/catch` | `limiteDeTiempo.test.ts` |
