@@ -47,13 +47,28 @@ if [[ -z "${CACHED_COMMIT_REF:-}" || -z "${COMMIT_REF:-}" ]]; then
   exit 1
 fi
 
-if git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- "${RUTAS[@]}"; then
+CAMBIADOS="$(git diff --name-only "$CACHED_COMMIT_REF" "$COMMIT_REF" -- "${RUTAS[@]}")"
+
+if [[ -z "$CAMBIADOS" ]]; then
   echo "Nada que afecte al sitio cambió entre $CACHED_COMMIT_REF y $COMMIT_REF."
   echo "Se cancela el build para no gastar un despliegue."
   echo "Rutas vigiladas: ${RUTAS[*]}"
   exit 0
 fi
 
+# `src` se vigila entero, pero los archivos de prueba viven dentro y no
+# llegan al paquete: Vite compila desde index.html y nada importa un
+# `.test.ts`. Un arreglo de una prueba costaba un despliegue completo
+# sin cambiar un byte de lo publicado.
+QUE_IMPORTAN="$(printf '%s\n' "$CAMBIADOS" | grep -v -E '\.test\.(ts|tsx)$' || true)"
+
+if [[ -z "$QUE_IMPORTAN" ]]; then
+  echo "Sólo cambiaron archivos de prueba, que no entran en el paquete:"
+  printf '%s\n' "$CAMBIADOS" | sed 's/^/  /'
+  echo "Se cancela el build para no gastar un despliegue."
+  exit 0
+fi
+
 echo "Cambios en el frontend: se compila."
-git diff --name-only "$CACHED_COMMIT_REF" "$COMMIT_REF" -- "${RUTAS[@]}" | sed 's/^/  /'
+printf '%s\n' "$QUE_IMPORTAN" | sed 's/^/  /'
 exit 1

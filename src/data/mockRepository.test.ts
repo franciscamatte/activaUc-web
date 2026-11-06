@@ -24,6 +24,28 @@ const CORREO_ADMIN = "admin@uc.cl";
 
 let repo: MockRepository;
 
+/**
+ * Primera hora libre de un recinto, a partir de `horas` desde ahora.
+ *
+ * Crear un bloque en una hora fija hacía que la prueba pasara o fallara
+ * **según la hora del día**: los bloques de la semilla empiezan en hora
+ * en punto, el índice de unicidad es por hora exacta de inicio, y a
+ * ciertas horas el cálculo caía justo sobre uno existente. Buscar el
+ * hueco en lugar de suponerlo quita esa dependencia del reloj, y
+ * seguirá valiendo si la semilla cambia.
+ */
+async function primerHuecoLibre(recintoId: string, horas: number): Promise<Date> {
+  const ocupados = new Set((await repo.listarBloques(recintoId)).map((b) => b.inicio));
+  const inicio = new Date(Date.now() + horas * 3_600_000);
+  inicio.setMinutes(0, 0, 0);
+  // Un recinto con 24 bloques seguidos ocupados no existe en la
+  // semilla; el tope evita un bucle infinito si alguna vez existiera.
+  for (let intento = 0; intento < 24 && ocupados.has(inicio.toISOString()); intento += 1) {
+    inicio.setTime(inicio.getTime() + 3_600_000);
+  }
+  return inicio;
+}
+
 beforeEach(() => {
   // Cada prueba parte de datos frescos: el constructor no encuentra
   // sessionStorage en el entorno de Node y genera la semilla.
@@ -969,8 +991,7 @@ describe("aviso de cupo liberado", () => {
   async function bloqueLleno(): Promise<string> {
     await repo.iniciarSesion(CORREO_ADMIN, CLAVE);
     const recinto = (await repo.listarRecintosAsignados())[0];
-    const inicio = new Date(Date.now() + 30 * 3_600_000);
-    inicio.setMinutes(0, 0, 0);
+    const inicio = await primerHuecoLibre(recinto.id, 30);
 
     await repo.crearBloque({
       recintoId: recinto.id,
@@ -1164,12 +1185,7 @@ describe("administrador general (REQ-29)", () => {
       repo.actualizarRecinto(recintos[0].id, { descripcion: "Actualizado" }),
     ).resolves.toBeUndefined();
 
-    // Un minuto que la semilla no usa: sus bloques empiezan siempre en
-    // hora en punto, y el índice de unicidad es por hora exacta de
-    // inicio. Con minutos en cero, la prueba fallaba o no según la hora
-    // a la que se ejecutara.
-    const manana = new Date(Date.now() + 36 * 60 * 60 * 1000);
-    manana.setMinutes(37, 0, 0);
+    const manana = await primerHuecoLibre(recintos[0].id, 36);
     const fin = new Date(manana.getTime() + 60 * 60 * 1000);
 
     await expect(

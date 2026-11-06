@@ -201,6 +201,12 @@ el build cuando el commit no toca nada que acabe en lo publicado: `src/`,
 —`docs/`, `supabase/`, `scripts/`— no cambia el sitio y no merece un
 despliegue.
 
+`src/` se vigila entero, pero hay una excepción dentro: los archivos
+`*.test.ts` viven ahí y **no entran en el paquete**, porque Vite compila
+desde `index.html` y nada importa una prueba. Un commit que sólo arregla
+pruebas también se cancela; arreglar una prueba costaba 15 créditos sin
+cambiar un byte de lo publicado.
+
 > Ojo con la semántica, que está invertida: el comando `ignore` **cancela**
 > el build al salir con **0** y lo ejecuta al salir con **1**.
 
