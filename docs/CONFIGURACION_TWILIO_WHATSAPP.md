@@ -573,3 +573,62 @@ conviene saberlo si algún día hay que auditar un envío viejo.
 
 Y si quedaran trabajos a medio reintentar de antes del cambio, saldrán
 con las credenciales nuevas, que es lo correcto.
+
+---
+
+## 11. Cuando se agota el crédito del plan de prueba
+
+Es lo que pasa antes o después: el crédito de la cuenta Trial llega a
+cero. Conviene saber qué significa exactamente, porque desde fuera
+parece otra cosa.
+
+**La cuenta no se rompe.** Las credenciales siguen siendo válidas, el
+estado sigue siendo `active` y el plan sigue siendo `Trial`. Lo único
+que no se puede hacer es enviar. Por eso el diagnóstico consulta el
+saldo (§ 1.5): sin ese dato, «credenciales válidas» y «cuenta activa»
+hacen pensar en un error de configuración que no existe.
+
+```bash
+bash scripts/diagnose-twilio.sh   # muestra el saldo y avisa si es 0
+```
+
+**Qué sigue funcionando sin tocar nada:**
+
+- El **canal de correo**, que va por Brevo y no tiene relación con
+  Twilio. Cada persona elige su vía en «Datos personales», así que una
+  cuenta con el correo consentido sigue recibiendo confirmaciones,
+  recordatorios y avisos de cupo con normalidad.
+- Toda la cola de WhatsApp: encolado, reintentos con retroceso,
+  idempotencia y trazabilidad. Lo que falla es la llamada final al
+  proveedor, y falla de forma limpia, registrada y sin afectar a la
+  reserva.
+
+### Las tres salidas, y qué cuesta cada una
+
+| Salida | Qué habilita | Qué cuesta |
+|---|---|---|
+| **Recargar la cuenta** | Sale de Trial: Content API disponible, textos propios en lugar de las muestras, sin el `join` del Sandbox si se compra un número | La recarga mínima de Twilio. Las plantillas propias siguen necesitando la aprobación de Meta, que no es inmediata |
+| **Demostrar por correo** | Todo el recorrido de notificaciones, con los textos propios de ActivaUC | Nada. Es la vía que ya está en marcha |
+| **Meta Cloud API directo** | Plantillas propias desde el primer día, sin intermediario | 250–300 líneas de código y la aprobación de plantillas de Meta. Ver [ALTERNATIVAS_PROVEEDORES.md](ALTERNATIVAS_PROVEEDORES.md) § 2 |
+
+> **Abrir otra cuenta Trial no es una de las salidas.** La política de uso
+> aceptable de Twilio lo prohíbe expresamente y permite suspender las
+> cuentas que lo hagan. Técnicamente funciona —los pasos están en § 10,
+> que vale para los cambios legítimos— pero una suspensión llega cuando
+> llega, y eso incluye el día de una demostración.
+
+### Si vas a demostrar por correo
+
+Con el crédito a cero, cada reserva de alguien que tenga **WhatsApp**
+consentido encola un trabajo que agota sus reintentos y aparece como
+incidencia en el panel. Dos maneras de llevarlo, y las dos son honestas:
+
+- **Dejarlo.** La incidencia es real y muestra funcionando el retroceso,
+  el tope de intentos y la trazabilidad, sin que ninguna reserva se vea
+  afectada. Es evidencia, no un defecto.
+- **Revocar el consentimiento de WhatsApp** en «Datos personales» de esa
+  cuenta antes de la demostración. Entonces no se encola nada por ese
+  canal y el panel queda sin incidencias nuevas.
+
+Lo que **no** conviene es descartar la incidencia y presentar el canal
+como operativo: el registro diría una cosa y la pantalla otra.

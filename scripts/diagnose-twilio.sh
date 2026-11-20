@@ -82,6 +82,28 @@ case "$TIPO" in
 esac
 
 # ---------------------------------------------------------------------
+# 1.5 · Saldo
+# ---------------------------------------------------------------------
+# Una cuenta Trial con el crédito agotado sigue respondiendo «válidas» y
+# «activa»: lo único que cambia es que no puede enviar. Sin esta
+# comprobación, el diagnóstico decía que todo estaba en orden mientras
+# cada envío fallaba, y no había forma de distinguirlo de un problema de
+# configuración.
+SALDO="$(pedir "https://api.twilio.com/2010-04-01/Accounts/${SID}/Balance.json"   | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+print("%s %s" % (d.get("balance", "?"), d.get("currency", "")))' 2>/dev/null)"
+
+if [[ -n "${SALDO:-}" ]]; then
+  echo "   · Saldo: $SALDO"
+  case "$SALDO" in
+    0|0.0*|-*)
+      echo "     ✖ Sin saldo: los envíos van a fallar aunque todo lo demás esté bien."
+      echo "       Opciones, en § 11 de docs/CONFIGURACION_TWILIO_WHATSAPP.md."
+      ;;
+  esac
+fi
+
+# ---------------------------------------------------------------------
 # 2 · El número del Sandbox, que NO es el mismo en todas las cuentas
 # ---------------------------------------------------------------------
 echo ""
