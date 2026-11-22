@@ -281,8 +281,32 @@ export function aAuditoria(fila: FilaAuditoria): EntradaAuditoria {
   };
 }
 
-/** Etiqueta legible de una acción de auditoría. */
-export function etiquetaAccionAuditoria(accion: string): string {
+/**
+ * Etiqueta legible de una acción de auditoría.
+ *
+ * Los detalles de la fila entran como segundo argumento porque tres
+ * acciones históricas no se pueden traducir sin ellos: antes de la
+ * retirada de WhatsApp, **todo** aviso se registraba como
+ * `whatsapp_enviado`, también el que salía por correo. De las filas que
+ * hay en producción con ese nombre, la gran mayoría llevan
+ * `canal: email`: llamarlas «mensaje de WhatsApp» es simplemente falso.
+ * Así que el nombre de la acción da el hecho (se envió, falló, se
+ * omitió) y el canal de los detalles dice por dónde.
+ */
+export function etiquetaAccionAuditoria(
+  accion: string,
+  detalles?: Record<string, unknown>,
+): string {
+  const canal = typeof detalles?.canal === "string" ? detalles.canal : null;
+  const porDonde = canal === "whatsapp" ? " por WhatsApp" : canal === "email" ? " por correo" : "";
+
+  const historicas: Record<string, string> = {
+    whatsapp_enviado: `Aviso enviado${porDonde}`,
+    whatsapp_fallido: `Falló el aviso${porDonde}`,
+    whatsapp_omitido: `Aviso omitido${porDonde}`,
+  };
+  if (accion in historicas) return historicas[accion];
+
   const mapa: Record<string, string> = {
     reserva_creada: "Reserva creada",
     reserva_cancelada_usuario: "Cancelada por el usuario",
@@ -295,11 +319,6 @@ export function etiquetaAccionAuditoria(accion: string): string {
     notificacion_enviada: "Notificación enviada",
     notificacion_fallida: "Falló el envío de la notificación",
     notificacion_omitida: "Notificación omitida",
-    // Las tres de abajo sólo aparecen en filas anteriores a la retirada
-    // del canal de WhatsApp. Se traducen porque la bitácora las conserva.
-    whatsapp_enviado: "Mensaje de WhatsApp enviado",
-    whatsapp_fallido: "Falló el envío de WhatsApp",
-    whatsapp_omitido: "Mensaje de WhatsApp omitido",
     consentimiento_otorgado: "Consentimiento de avisos otorgado",
     consentimiento_revocado: "Consentimiento de avisos revocado",
     recinto_creado: "Recinto creado",
@@ -308,6 +327,9 @@ export function etiquetaAccionAuditoria(accion: string): string {
     bloque_creado: "Bloque horario creado",
     bloque_actualizado: "Bloque horario actualizado",
     bloque_desactivado: "Bloque horario desactivado",
+    incidencia_descartada: "Incidencia descartada",
+    administrador_asignado: "Administrador asignado",
+    administrador_retirado: "Administrador retirado",
   };
   return mapa[accion] ?? accion.replace(/_/g, " ");
 }

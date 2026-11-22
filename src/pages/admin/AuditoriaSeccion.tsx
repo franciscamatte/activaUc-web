@@ -4,7 +4,7 @@ import { useAsync } from "../../state/useAsync";
 import { etiquetaAccionAuditoria } from "../../data/rows";
 import type { EntradaAuditoria, Recinto } from "../../domain/types";
 import { esAdministrador } from "../../domain/types";
-import { formatearFechaHora } from "../../lib/format";
+import { formatearDuracionHoras, formatearFechaHora } from "../../lib/format";
 import Boton from "../../components/ui/Boton";
 import { CampoSelect } from "../../components/ui/Campo";
 import Insignia from "../../components/ui/Insignia";
@@ -15,15 +15,33 @@ interface Props {
   recintos: Recinto[];
 }
 
+// El campo `tipo` de los detalles significa cosas distintas según la
+// acción: en una incidencia es el sistema que falló, en un aviso es el
+// motivo del aviso, y en un recinto es el deporte. Por eso se traduce
+// por separado en lugar de con una sola tabla.
+const TIPOS_DE_INCIDENCIA: Record<string, string> = {
+  // `whatsapp` es de antes de retirar el canal: la incidencia era de un
+  // aviso, que es lo que esto significa hoy.
+  whatsapp: "aviso",
+  email: "aviso",
+  google_calendar: "Google Calendar",
+};
+
+const TIPOS_DE_AVISO: Record<string, string> = {
+  confirmacion: "confirmación",
+  recordatorio: "recordatorio",
+  cupo_liberado: "cupo liberado",
+};
+
 /** Detalles de auditoría que tienen sentido mostrar en la interfaz. */
-function resumirDetalles(detalles: Record<string, unknown>): string {
+function resumirDetalles(accion: string, detalles: Record<string, unknown>): string {
   const partes: string[] = [];
 
   if (typeof detalles.motivo === "string" && detalles.motivo) {
     partes.push(`Motivo: ${detalles.motivo}`);
   }
   if (typeof detalles.horas_de_anticipacion === "number") {
-    partes.push(`${detalles.horas_de_anticipacion} h de anticipación`);
+    partes.push(`${formatearDuracionHoras(detalles.horas_de_anticipacion)} de anticipación`);
   }
   if (typeof detalles.cupos_restantes === "number") {
     partes.push(`${detalles.cupos_restantes} cupos restantes`);
@@ -31,8 +49,12 @@ function resumirDetalles(detalles: Record<string, unknown>): string {
   if (typeof detalles.intentos === "number") {
     partes.push(`${detalles.intentos} intentos`);
   }
-  if (typeof detalles.tipo === "string") {
-    partes.push(`Tipo: ${detalles.tipo}`);
+  if (typeof detalles.tipo === "string" && detalles.tipo) {
+    const tabla = accion === "incidencia_descartada" ? TIPOS_DE_INCIDENCIA : TIPOS_DE_AVISO;
+    partes.push(`Tipo: ${tabla[detalles.tipo] ?? detalles.tipo.replace(/_/g, " ")}`);
+  }
+  if (typeof detalles.estado === "string" && detalles.estado) {
+    partes.push(`Estado: ${detalles.estado}`);
   }
   if (typeof detalles.nombre === "string") {
     partes.push(detalles.nombre);
@@ -99,7 +121,7 @@ export default function AuditoriaSeccion({ repositorio, recintos }: Props) {
       ) : (
         <ol className="space-y-2">
           {lista.map((entrada) => {
-            const detalle = resumirDetalles(entrada.detalles);
+            const detalle = resumirDetalles(entrada.accion, entrada.detalles);
             const esError = entrada.accion.includes("error") || entrada.accion.includes("fallido");
             const esCancelacion = entrada.accion.includes("cancelada");
 
@@ -111,7 +133,7 @@ export default function AuditoriaSeccion({ repositorio, recintos }: Props) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Insignia tono={esError ? "error" : esCancelacion ? "aviso" : "neutro"}>
-                      {etiquetaAccionAuditoria(entrada.accion)}
+                      {etiquetaAccionAuditoria(entrada.accion, entrada.detalles)}
                     </Insignia>
                     {entrada.actorRol ? (
                       <span className="text-xs text-slate-500">

@@ -86,7 +86,7 @@ export default function DatosPersonalesPage() {
   const [oauthDescartado, setOauthDescartado] = useState(false);
 
   const avisoOauth = !oauthDescartado && resultadoOauth.estado === "conectado"
-    ? "Conectamos tu cuenta de Google Calendar. Tus próximas reservas se agregarán a tu calendario."
+    ? "Conectamos tu cuenta de Google Calendar. Agregamos también las reservas que ya tenías, y las próximas se irán sumando solas."
     : null;
   const errorOauth = !oauthDescartado && resultadoOauth.estado === "error"
     ? MOTIVOS_CALENDARIO[resultadoOauth.motivo] ??
@@ -396,9 +396,10 @@ export default function DatosPersonalesPage() {
         </div>
 
         <p className="text-sm text-slate-600">
-          La conexión es voluntaria. Si la activas, cada reserva que confirmes se agregará
-          como evento a tu calendario y se eliminará si la cancelas. Desconectarla no
-          afecta tus reservas.
+          La conexión es voluntaria. Al activarla agregamos las reservas vigentes que ya
+          tengas, y desde entonces cada reserva que confirmes se agrega como evento a tu
+          calendario y se elimina si la cancelas. Desconectarla no afecta tus reservas y
+          deja en tu calendario los eventos ya creados, para que los borres si quieres.
         </p>
 
         {errorEstadoCalendario && !cargandoCalendario ? (

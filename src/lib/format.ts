@@ -142,3 +142,33 @@ export function etiquetaCupos(disponibles: number, capacidad: number): string {
 export function pluralizar(cantidad: number, singular: string, plural: string): string {
   return cantidad === 1 ? `${cantidad} ${singular}` : `${cantidad} ${plural}`;
 }
+
+/**
+ * Una duración en horas, dicha en días, horas y minutos.
+ *
+ * La bitácora guarda la anticipación de una cancelación como un número
+ * de horas con decimales, que es exacto y no se entiende: «297.3 h de
+ * anticipación» obliga a dividir mentalmente por 24. Esto lo traduce a
+ * «12 días, 9 horas y 18 minutos», omitiendo las unidades que valen
+ * cero para no decir «0 días».
+ */
+export function formatearDuracionHoras(horas: number): string {
+  if (!Number.isFinite(horas)) return "—";
+
+  const minutosTotales = Math.round(Math.max(0, horas) * 60);
+  if (minutosTotales === 0) return "menos de 1 minuto";
+
+  const dias = Math.floor(minutosTotales / 1440);
+  const horasRestantes = Math.floor((minutosTotales % 1440) / 60);
+  const minutos = minutosTotales % 60;
+
+  const partes: string[] = [];
+  if (dias > 0) partes.push(pluralizar(dias, "día", "días"));
+  if (horasRestantes > 0) partes.push(pluralizar(horasRestantes, "hora", "horas"));
+  if (minutos > 0) partes.push(pluralizar(minutos, "minuto", "minutos"));
+
+  // «12 días, 9 horas y 18 minutos»: coma entre las primeras y «y»
+  // antes de la última, como se dice en español.
+  if (partes.length === 1) return partes[0];
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}

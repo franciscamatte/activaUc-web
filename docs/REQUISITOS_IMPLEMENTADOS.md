@@ -161,7 +161,7 @@ solicitud (igual que PostgREST en Supabase):
 | Guía de uso para usuarios y administradores | `docs/GUIA_USUARIO.md`, `docs/GUIA_ADMINISTRADOR.md` |
 | Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) |
 | Linter configurado en el repositorio | ESLint con configuración plana sobre `src/`, `supabase/functions/` y `scripts/`. **La configuración anterior sólo declaraba `files: ["**/*.js"]`, por lo que no revisaba ningún archivo del proyecto**; se corrigió |
-| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 236 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
+| Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 242 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
 
 ---
 

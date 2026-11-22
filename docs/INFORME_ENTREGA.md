@@ -328,19 +328,24 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 ### Vitest
 
 ```
-Test Files  8 passed (8)
-     Tests  236 passed (236)
+Test Files  12 passed (12)
+     Tests  242 passed (242)
 ```
 
 | Archivo | Pruebas |
 |---|---|
-| `src/data/mockRepository.test.ts` | 61 |
-| `src/domain/reservationRules.test.ts` | 34 |
-| `src/test/oauthCrypto.test.ts` | 24 |
+| `src/data/mockRepository.test.ts` | 82 |
+| `src/domain/reservationRules.test.ts` | 35 |
+| `src/test/oauthCrypto.test.ts` | 23 |
 | `src/test/googleCalendar.test.ts` | 23 |
 | `src/lib/errors.test.ts` | 21 |
 | `src/domain/phone.test.ts` | 20 |
 | `src/lib/retry.test.ts` | 10 |
+| `src/test/brevoEmail.test.ts` | 10 |
+| `src/lib/format.test.ts` | 6 |
+| `src/lib/limiteDeTiempo.test.ts` | 5 |
+| `src/lib/destino.test.ts` | 4 |
+| `src/domain/types.test.ts` | 3 |
 
 ### Base de datos (PostgreSQL real)
 
@@ -389,7 +394,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 236 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 242 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de

@@ -900,12 +900,22 @@ export class MockRepository implements ActivaRepository {
     const dueno = this.estado.cuentas.find((c) => c.id === reserva.usuarioId);
     const notificar = comoAdmin && dueno?.correoConsentido === true;
 
+    // La anticipación se registra igual que en la base de datos real,
+    // con dos decimales, para que el modo demostración muestre la
+    // bitácora tal como se ve en producción.
+    const anticipacion =
+      Math.round(((new Date(reserva.inicio).getTime() - Date.now()) / 3_600_000) * 100) / 100;
+
     this.auditar({
       reservaId: reserva.id,
       recintoId: reserva.recintoId,
       accion: comoAdmin ? "reserva_cancelada_admin" : "reserva_cancelada_usuario",
       actorRol: comoAdmin ? "administrador" : "usuario",
-      detalles: { motivo: reserva.motivoCancelacion, modo: "demostracion" },
+      detalles: {
+        motivo: reserva.motivoCancelacion,
+        horas_de_anticipacion: anticipacion,
+        modo: "demostracion",
+      },
     });
     this.guardar();
 
