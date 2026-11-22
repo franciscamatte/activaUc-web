@@ -539,6 +539,32 @@ begin
   assert (select dismissed_at is null from public.calendar_sync_jobs where reservation_id = _futura),
     'Un trabajo revivido no debería seguir descartado del informe';
 
+  -- Y el caso de verdad frecuente: desconectar **cancela** los trabajos
+  -- pendientes, así que reconectar tiene que revivir también eso. Es el
+  -- camino que sigue cualquiera que vea su calendario desactualizado.
+  update public.calendar_sync_jobs
+  set status = 'cancelado', last_error = 'Conexión de Google Calendar revocada.'
+  where reservation_id = _futura;
+  update public.reservations set calendar_sync_status = 'no_aplica' where id = _futura;
+
+  update public.calendar_connections set status = 'revocado' where user_id = _u;
+  update public.calendar_connections set status = 'conectado' where user_id = _u;
+
+  assert (select status::text from public.calendar_sync_jobs where reservation_id = _futura)
+         = 'pendiente',
+    'Reconectar debería revivir el trabajo que canceló la desconexión';
+  assert (select calendar_sync_status::text from public.reservations where id = _futura)
+         = 'pendiente',
+    'La reserva debería volver a quedar pendiente de sincronizar';
+
+  -- Un trabajo ya completado no se revive: su evento existe.
+  update public.calendar_sync_jobs set status = 'completado' where reservation_id = _futura;
+  update public.calendar_connections set status = 'revocado' where user_id = _u;
+  update public.calendar_connections set status = 'conectado' where user_id = _u;
+  assert (select status::text from public.calendar_sync_jobs where reservation_id = _futura)
+         = 'completado',
+    'Un trabajo completado no debería reabrirse al reconectar';
+
   -- Y queda constancia de la conexión con cuántas reservas arrastró.
   assert exists (
     select 1 from public.reservation_audit_log

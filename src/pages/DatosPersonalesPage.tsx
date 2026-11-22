@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
@@ -109,8 +109,17 @@ export default function DatosPersonalesPage() {
   // Tras una conexión exitosa se refresca el estado real desde el
   // servidor y se limpia la URL, que son efectos sobre sistemas
   // externos (la API y el historial del navegador), no estado derivado.
+  //
+  // El cerrojo es necesario: esto debe ocurrir **una vez** por vuelta
+  // del flujo de OAuth, y las dependencias de un efecto no garantizan
+  // eso. Si alguna cambiara de identidad entre renders, el efecto
+  // volvería a consultar, la consulta fijaría estado, y de ahí un
+  // bucle. Ya pasó una vez.
+  const oauthProcesado = useRef(false);
+
   useEffect(() => {
-    if (!resultadoOauth.estado) return;
+    if (!resultadoOauth.estado || oauthProcesado.current) return;
+    oauthProcesado.current = true;
 
     if (resultadoOauth.estado === "conectado") {
       void recargarCalendario();

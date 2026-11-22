@@ -125,7 +125,7 @@ src/
 
 supabase/
   migrations/    Esquema, funciones, RLS, Realtime, series, despacho, canal de correo,
-                 rol general, avisos de cupo y retirada de WhatsApp (14 migraciones ordenadas)
+                 rol general, avisos de cupo y retirada de WhatsApp (15 migraciones ordenadas)
   functions/     7 Edge Functions + módulos compartidos en _shared/
   tests/         Pruebas SQL de esquema, reservas, cancelaciones, RLS e integraciones
   cron/          Programación de tareas con pg_cron (se ejecuta una vez por entorno)

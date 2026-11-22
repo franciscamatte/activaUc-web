@@ -151,6 +151,29 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     };
   }, [repositorio, cargarPerfil, cargarCalendario]);
 
+  /**
+   * Estables a propósito.
+   *
+   * El objeto del contexto se construye nuevo en cada render, así que
+   * todo lo que contiene cambia de identidad constantemente. Para una
+   * función que un componente ponga en las dependencias de un efecto,
+   * eso es un bucle: el efecto la llama, la llamada fija estado, el
+   * render siguiente le da una identidad nueva y el efecto vuelve a
+   * correr. Pasó con la consulta del estado de Google Calendar al
+   * volver del consentimiento: la insignia parpadeaba entre
+   * «Consultando…» y el resultado hasta que una de las llamadas
+   * superpuestas agotaba su límite de tiempo.
+   */
+  const recargarPerfil = useCallback(async () => {
+    if (!repositorio) return;
+    await cargarPerfil(repositorio);
+  }, [repositorio, cargarPerfil]);
+
+  const recargarCalendario = useCallback(async () => {
+    if (!repositorio) return;
+    await cargarCalendario(repositorio);
+  }, [repositorio, cargarCalendario]);
+
   const valor: EstadoAuth = {
     fase,
     perfil,
@@ -210,15 +233,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       await cargarPerfil(repositorio);
     },
 
-    recargarPerfil: async () => {
-      if (!repositorio) return;
-      await cargarPerfil(repositorio);
-    },
-
-    recargarCalendario: async () => {
-      if (!repositorio) return;
-      await cargarCalendario(repositorio);
-    },
+    recargarPerfil,
+    recargarCalendario,
 
     actualizarNombre: async (nombre) => {
       if (!repositorio) throw aAppError(new Error("Repositorio no disponible."));
