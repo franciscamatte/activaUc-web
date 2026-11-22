@@ -17,6 +17,15 @@ interface Props {
  *  · Cierra con la tecla Escape.
  *  · Mueve el foco al diálogo al abrirse y lo devuelve al cerrarse.
  *  · Atrapa el foco con Tab para no perderlo detrás del fondo.
+ *
+ * El efecto que hace todo eso depende **sólo** de `abierto`, y llega a
+ * `onCerrar` por una referencia que se mantiene al día. Tenerlo en las
+ * dependencias parecía lo correcto y rompía el diálogo entero: quien lo
+ * usa pasa una función en línea (`() => setEditando(null)`), que cambia
+ * de identidad en cada render, así que al escribir una letra en un
+ * campo React ejecutaba la limpieza —que devuelve el foco a quien abrió
+ * el diálogo— y volvía a montar el efecto, que lo movía al contenedor.
+ * Se escribía un carácter y el teclado dejaba de responder.
  */
 export default function Modal({
   abierto,
@@ -31,6 +40,14 @@ export default function Modal({
   const contenedor = useRef<HTMLDivElement>(null);
   const foconAnterior = useRef<HTMLElement | null>(null);
 
+  // La referencia se actualiza después de cada render, de modo que el
+  // efecto de abajo siempre llama a la versión vigente sin necesitarla
+  // en sus dependencias.
+  const alCerrar = useRef(onCerrar);
+  useEffect(() => {
+    alCerrar.current = onCerrar;
+  });
+
   useEffect(() => {
     if (!abierto) return;
 
@@ -40,7 +57,7 @@ export default function Modal({
     const alTeclear = (evento: KeyboardEvent) => {
       if (evento.key === "Escape") {
         evento.preventDefault();
-        onCerrar();
+        alCerrar.current();
         return;
       }
 
@@ -72,7 +89,7 @@ export default function Modal({
       document.body.style.overflow = overflowPrevio;
       foconAnterior.current?.focus();
     };
-  }, [abierto, onCerrar]);
+  }, [abierto]);
 
   if (!abierto) return null;
 
