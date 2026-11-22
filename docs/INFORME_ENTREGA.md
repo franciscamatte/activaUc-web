@@ -328,7 +328,7 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  235 passed (235)
+     Tests  236 passed (236)
 ```
 
 | Archivo | Pruebas |
@@ -388,7 +388,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 235 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 236 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de

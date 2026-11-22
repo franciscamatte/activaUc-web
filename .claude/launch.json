@@ -12,6 +12,19 @@
         "/mnt/c/Users/nicol/Downloads/activaUc-web/scripts/dev-wsl.sh"
       ],
       "port": 5173
+    },
+    {
+      "name": "demo",
+      "runtimeExecutable": "wsl",
+      "runtimeArgs": [
+        "-d",
+        "Ubuntu-24.04",
+        "--",
+        "bash",
+        "-lc",
+        "VITE_DATA_MODE=mock PORT=5174 bash /mnt/c/Users/nicol/Downloads/activaUc-web/scripts/dev-wsl.sh"
+      ],
+      "port": 5174
     }
   ]
 }

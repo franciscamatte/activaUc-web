@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../state/authContext";
-import { enmascararTelefono, normalizarTelefono, validarTelefono } from "../domain/phone";
+import { normalizarTelefono, validarTelefono } from "../domain/phone";
 import { formatearFechaHora } from "../lib/format";
 import { aAppError } from "../lib/errors";
 import { esModoMock } from "../data";
@@ -63,7 +63,6 @@ export default function DatosPersonalesPage() {
   // --- Teléfono (REQ-7) ---------------------------------------------
   const [telefono, setTelefono] = useState<string | null>(null);
   const [errorTelefono, setErrorTelefono] = useState<string | null>(null);
-  const [guardandoTelefono, setGuardandoTelefono] = useState(false);
   const [avisoTelefono, setAvisoTelefono] = useState<string | null>(null);
 
   // --- Correo (REQ-22, REQ-23 aplicados al otro canal) ------------
@@ -127,22 +126,60 @@ export default function DatosPersonalesPage() {
     return <Cargando texto="Cargando tus datos…" />;
   }
 
-  async function guardarNombre(evento: FormEvent) {
+  /**
+   * REQ-7 · nombre y teléfono se guardan juntos.
+   *
+   * Son los dos campos editables de la cuenta y el requisito los nombra
+   * en la misma frase, así que tenerlos en formularios separados
+   * obligaba a guardar dos veces lo que es un solo cambio. Se envía sólo
+   * lo que cambió: si tocaste el nombre, no se reescribe el teléfono.
+   */
+  async function guardarCuenta(evento: FormEvent) {
     evento.preventDefault();
+    // El render ya devolvió «Cargando» si no hay perfil, pero las
+    // declaraciones de función se elevan y TypeScript no lo sabe aquí.
+    if (!perfil) return;
     setErrorNombre(null);
+    setErrorTelefono(null);
     setNombreGuardado(false);
+    setAvisoTelefono(null);
 
-    if (nombreMostrado.trim().length < 2) {
+    const nombreCambio = nombreMostrado.trim() !== perfil.nombre;
+    const telefonoLimpio = telefonoMostrado.trim();
+    const telefonoCambio = telefonoLimpio !== (perfil.telefono ?? "");
+
+    if (nombreCambio && nombreMostrado.trim().length < 2) {
       setErrorNombre("Ingresa tu nombre completo (al menos 2 caracteres).");
       return;
+    }
+    if (telefonoCambio && telefonoLimpio !== "") {
+      const problema = validarTelefono(telefonoLimpio);
+      if (problema) {
+        setErrorTelefono(problema);
+        return;
+      }
     }
 
     setGuardandoNombre(true);
     try {
-      await actualizarNombre(nombreMostrado);
-      setNombreGuardado(true);
+      if (nombreCambio) {
+        await actualizarNombre(nombreMostrado);
+        setNombreGuardado(true);
+      }
+
+      if (telefonoCambio) {
+        const resultado = await actualizarTelefono(
+          telefonoLimpio === "" ? null : normalizarTelefono(telefonoLimpio),
+        );
+        if (resultado.ok) {
+          setAvisoTelefono(resultado.mensaje);
+          setTelefono(null);
+        } else {
+          setErrorTelefono(resultado.mensaje);
+        }
+      }
     } catch (e) {
-      setErrorNombre(aAppError(e, "guardar tu nombre").message);
+      setErrorNombre(aAppError(e, "guardar tus datos").message);
     } finally {
       setGuardandoNombre(false);
     }
@@ -160,38 +197,6 @@ export default function DatosPersonalesPage() {
       setErrorCorreo(aAppError(e, "guardar tu preferencia de correo").message);
     } finally {
       setGuardandoCorreo(false);
-    }
-  }
-
-  async function guardarTelefono(evento: FormEvent) {
-    evento.preventDefault();
-    setErrorTelefono(null);
-    setAvisoTelefono(null);
-
-    const vacio = telefonoMostrado.trim() === "";
-    if (!vacio) {
-      const problema = validarTelefono(telefonoMostrado);
-      if (problema) {
-        setErrorTelefono(problema);
-        return;
-      }
-    }
-
-    setGuardandoTelefono(true);
-    try {
-      const resultado = await actualizarTelefono(
-        vacio ? null : normalizarTelefono(telefonoMostrado),
-      );
-      if (resultado.ok) {
-        setAvisoTelefono(resultado.mensaje);
-        setTelefono(null);
-      } else {
-        setErrorTelefono(resultado.mensaje);
-      }
-    } catch (e) {
-      setErrorTelefono(aAppError(e, "guardar tu teléfono").message);
-    } finally {
-      setGuardandoTelefono(false);
     }
   }
 
@@ -240,9 +245,9 @@ export default function DatosPersonalesPage() {
         </p>
       </header>
 
-      {/* --- Cuenta --------------------------------------------------- */}
+      {/* --- Mi cuenta · REQ-7 --------------------------------------- */}
       <form
-        onSubmit={guardarNombre}
+        onSubmit={guardarCuenta}
         noValidate
         className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
       >
@@ -269,53 +274,8 @@ export default function DatosPersonalesPage() {
           error={errorNombre}
         />
 
-        {nombreGuardado ? (
-          <Alerta tono="exito" onCerrar={() => setNombreGuardado(false)}>
-            Guardamos tu nombre.
-          </Alerta>
-        ) : null}
-
-        <Boton
-          type="submit"
-          cargando={guardandoNombre}
-          disabled={nombreMostrado.trim() === perfil.nombre}
-        >
-          Guardar nombre
-        </Boton>
-      </form>
-
-      {/* --- Teléfono (REQ-7) ---------------------------------------- */}
-      <form
-        onSubmit={guardarTelefono}
-        noValidate
-        className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Teléfono</h2>
-          {perfil.telefono ? (
-            <Insignia tono="exito">Registrado</Insignia>
-          ) : (
-            <Insignia tono="neutro">Sin registrar</Insignia>
-          )}
-        </div>
-
-        <p className="text-sm text-slate-600">
-          Es un dato de contacto para la administración del recinto. Los avisos de
-          tus reservas llegan por correo, así que registrarlo no activa ningún
-          envío. Puedes dejarlo en blanco para borrarlo.
-        </p>
-
-        {perfil.telefono ? (
-          <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm">
-            <p className="text-emerald-800">Número registrado</p>
-            <p className="font-medium text-emerald-950">
-              {enmascararTelefono(perfil.telefono)}
-            </p>
-          </div>
-        ) : null}
-
         <CampoTexto
-          etiqueta="Número de teléfono"
+          etiqueta="Teléfono (opcional)"
           type="tel"
           inputMode="tel"
           autoComplete="tel"
@@ -326,18 +286,36 @@ export default function DatosPersonalesPage() {
             setAvisoTelefono(null);
           }}
           error={errorTelefono}
-          ayuda="Formato internacional, por ejemplo +56912345678."
+          ayuda="Dato de contacto para la administración del recinto. Formato internacional, por ejemplo +56912345678. Déjalo en blanco para borrarlo."
           placeholder="+56912345678"
         />
 
-        {avisoTelefono ? (
-          <Alerta tono="exito" onCerrar={() => setAvisoTelefono(null)}>
-            {avisoTelefono}
+        {/* Un solo aviso para los dos campos: guardar el nombre y el
+            teléfono es un único gesto, y dos cajas verdes seguidas se
+            leen como si hubieran pasado dos cosas distintas. */}
+        {nombreGuardado || avisoTelefono ? (
+          <Alerta
+            tono="exito"
+            onCerrar={() => {
+              setNombreGuardado(false);
+              setAvisoTelefono(null);
+            }}
+          >
+            {[nombreGuardado ? "Guardamos tu nombre." : null, avisoTelefono]
+              .filter(Boolean)
+              .join(" ")}
           </Alerta>
         ) : null}
 
-        <Boton type="submit" cargando={guardandoTelefono}>
-          Guardar teléfono
+        <Boton
+          type="submit"
+          cargando={guardandoNombre}
+          disabled={
+            nombreMostrado.trim() === perfil.nombre &&
+            telefonoMostrado.trim() === (perfil.telefono ?? "")
+          }
+        >
+          Guardar cambios
         </Boton>
       </form>
 
@@ -355,10 +333,11 @@ export default function DatosPersonalesPage() {
         </div>
 
         <p className="text-sm text-slate-600">
-          La misma confirmación y el mismo recordatorio, a{" "}
+          Te enviaremos la confirmación de cada reserva, un recordatorio 2 horas
+          antes, el aviso si la administración la cancela y el aviso si se libera
+          un cupo que estabas esperando. Todo a{" "}
           <strong className="font-medium text-slate-800">{perfil.correo}</strong>, el
-          correo con que entras. Puedes tener las dos vías a la vez, una sola, o
-          ninguna: son independientes.
+          correo con que entras: no hace falta escribir ninguna dirección.
         </p>
 
         {errorCorreo ? (

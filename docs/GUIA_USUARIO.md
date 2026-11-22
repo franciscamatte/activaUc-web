@@ -147,31 +147,34 @@ En **Datos personales** puedes ver y cambiar tus datos.
 Tu correo y tu teléfono **sólo son visibles para ti**. Ninguna otra persona que
 use la plataforma, ni el personal de los recintos, puede consultarlos.
 
-### Tu nombre
+### Mi cuenta
 
-Puedes cambiarlo cuando quieras. El correo de tu cuenta no se modifica desde
-aquí: escribe a Deportes UC si lo necesitas.
+Tu **nombre** y tu **teléfono** se editan juntos, y con un solo botón
+—«Guardar cambios»— que se activa cuando cambias algo.
+
+El correo de tu cuenta no se modifica desde aquí: escribe a Deportes UC si lo
+necesitas.
+
+El teléfono es **opcional** y es sólo un dato de contacto para la
+administración del recinto: registrarlo **no activa ningún aviso**. Va en
+formato internacional —**+56912345678**, con el `+` y el código de país, sin
+espacios ni guiones— y si lo dejas en blanco, lo borramos.
 
 ### Notificaciones por correo
 
-Si registras tu número, recibirás:
+Si las activas, recibirás en el correo de tu cuenta:
 
 - La **confirmación** de cada reserva, al momento de hacerla.
 - Un **recordatorio** 2 horas antes del bloque.
 - Un **aviso** si la administración cancela tu reserva, con el motivo.
+- Un **aviso** si se libera un cupo en un bloque que estabas esperando.
 
-Para activarlas:
+Se activan con un botón —**Avisarme por correo**— y se desactivan con otro.
+No hay que escribir ninguna dirección: usamos la de tu cuenta, que ya
+verificaste al registrarte.
 
-1. Marca la casilla de consentimiento.
-2. Ingresa tu número en formato internacional: **+56912345678** (con el `+` y el
-   código de país, sin espacios ni guiones).
-3. Pulsa **Guardar preferencias**.
-
-Una vez guardado, sólo mostramos los últimos cuatro dígitos de tu número.
-
-**Para dejar de recibir mensajes**, pulsa **Eliminar número y revocar**.
-Borramos tu número, cancelamos los recordatorios ya programados y no te
-enviamos nada más. Tus reservas no se modifican.
+**Al desactivarlas**, cancelamos los recordatorios que estuvieran programados
+y no te enviamos nada más. Tus reservas no se modifican.
 
 > Si reservas con menos de 2 horas de anticipación recibirás sólo la
 > confirmación, no el recordatorio: ya no habría tiempo para enviarlo.

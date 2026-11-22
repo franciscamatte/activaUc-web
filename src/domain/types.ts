@@ -69,6 +69,16 @@ export function etiquetaRol(rol: Rol): string {
   }
 }
 
+/**
+ * Cómo se nombra cada rol cuando lo que se describe es **la cuenta** y no
+ * quien está dentro. En la barra de navegación, un usuario común no
+ * necesita que le recuerden su rol y basta «Sesión activa»; en una lista
+ * de cuentas, eso no dice nada.
+ */
+export function etiquetaRolDeCuenta(rol: Rol): string {
+  return rol === "usuario" ? "usuaria o usuario" : etiquetaRol(rol).toLowerCase();
+}
+
 /** Estado almacenado. "pasada" no se guarda: se deriva del tiempo. */
 export type EstadoReserva = "vigente" | "cancelada";
 

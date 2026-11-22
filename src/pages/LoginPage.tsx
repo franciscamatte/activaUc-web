@@ -5,6 +5,7 @@ import { useAuth } from "../state/authContext";
 import { esModoMock } from "../data";
 import { CUENTAS_DEMO } from "../data/seed";
 import { aAppError } from "../lib/errors";
+import { etiquetaRolDeCuenta } from "../domain/types";
 import { destinoSeguro } from "../lib/destino";
 import Alerta from "../components/ui/Alerta";
 import Boton from "../components/ui/Boton";
@@ -110,7 +111,7 @@ export default function LoginPage() {
                   <code className="rounded bg-sky-100 px-1.5 py-0.5">{cuenta.correo}</code>
                   {" · "}
                   <code className="rounded bg-sky-100 px-1.5 py-0.5">{cuenta.contrasena}</code>
-                  {cuenta.rol === "administrador" ? " (administradora)" : " (usuaria)"}
+                  {` (${etiquetaRolDeCuenta(cuenta.rol)})`}
                 </li>
               ))}
             </ul>

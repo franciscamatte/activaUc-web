@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esAdministrador, etiquetaRol } from "./types";
+import { esAdministrador, etiquetaRol, etiquetaRolDeCuenta } from "./types";
 import type { Rol } from "./types";
 
 const TODOS: Rol[] = ["usuario", "administrador", "administrador_general"];
@@ -15,6 +15,15 @@ describe("roles", () => {
     expect(esAdministrador("usuario")).toBe(false);
     expect(esAdministrador("administrador")).toBe(true);
     expect(esAdministrador("administrador_general")).toBe(true);
+  });
+
+  it("una cuenta se describe por su rol, no por su sesión", () => {
+    // En la barra, un usuario común ve «Sesión activa»; en una lista de
+    // cuentas eso no dice nada de la cuenta.
+    expect(etiquetaRol("usuario")).toBe("Sesión activa");
+    expect(etiquetaRolDeCuenta("usuario")).toContain("usuari");
+    expect(etiquetaRolDeCuenta("administrador_general")).toContain("general");
+    expect(new Set(TODOS.map(etiquetaRolDeCuenta)).size).toBe(TODOS.length);
   });
 
   it("cada rol tiene un nombre propio en pantalla", () => {
