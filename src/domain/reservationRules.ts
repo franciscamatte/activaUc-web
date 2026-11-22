@@ -17,7 +17,7 @@ import { esAdministrador } from "./types";
 /** Horas mínimas de anticipación para que el usuario cancele (REQ-15). */
 export const HORAS_MINIMAS_CANCELACION = 2;
 
-/** Horas de anticipación del recordatorio por WhatsApp (REQ-25). */
+/** Horas de anticipación del recordatorio (REQ-25). */
 export const HORAS_RECORDATORIO = 2;
 
 export interface Veredicto {
@@ -99,7 +99,7 @@ export function puedeCancelar(
 }
 
 /**
- * ¿Se programará un recordatorio por WhatsApp? (REQ-25)
+ * ¿Se programará un recordatorio? (REQ-25)
  *
  * Regla exacta: sólo si la reserva se crea con 2 horas o más de
  * anticipación. Con menos, el usuario recibe únicamente la confirmación.

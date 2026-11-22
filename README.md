@@ -4,7 +4,7 @@ Plataforma web para la reserva de espacios deportivos de **Deportes UC**.
 
 Permite consultar la disponibilidad de los recintos en tiempo real, reservar y
 cancelar bloques horarios sin sobrecupos ni duplicados, sincronizar las reservas
-con Google Calendar y recibir confirmaciones y recordatorios por WhatsApp.
+con Google Calendar y recibir confirmaciones y recordatorios por correo.
 
 La interfaz está íntegramente en español.
 
@@ -13,7 +13,7 @@ La interfaz está íntegramente en español.
 ## Estado del proyecto
 
 Versión **1.0**, lista para producción. Supabase es la fuente oficial del estado
-de las reservas; Google Calendar y WhatsApp son integraciones informativas que
+de las reservas; Google Calendar y los avisos por correo son integraciones informativas que
 nunca condicionan la validez de una reserva.
 
 | Capa | Tecnología | Estado |
@@ -24,12 +24,12 @@ nunca condicionan la validez de una reserva.
 | Concurrencia | Función transaccional `create_reservation_strict` | Implementado y verificado con pruebas de carga |
 | Tiempo real | Supabase Realtime + respaldo por intervalo | Implementado |
 | Google Calendar | OAuth 2.0 real en Edge Functions, tokens cifrados | Implementado |
-| WhatsApp | Twilio desde Edge Functions, con webhook de estados | Implementado |
+| Notificaciones | Correo por la API de Brevo desde Edge Functions, con trazabilidad por envío | Implementado |
 | Recordatorios | `pg_cron` + `pg_net` + worker de notificaciones | Implementado |
 | Despliegue | S3 + CloudFront (frontend), Supabase CLI (backend) | Scripts y documentación listos |
 
 **Lo que queda por hacer es exclusivamente configuración externa**: crear las
-cuentas de Google Cloud, Twilio, Supabase y AWS, cargar sus credenciales en los
+cuentas de Google Cloud, Brevo, Supabase y AWS, cargar sus credenciales en los
 gestores de secretos y ejecutar los comandos documentados. El detalle exacto
 está en [docs/REQUISITOS_IMPLEMENTADOS.md](docs/REQUISITOS_IMPLEMENTADOS.md).
 
@@ -77,7 +77,7 @@ npm run dev
 ```
 
 El modo demostración usa datos en memoria y **deshabilita** Google Calendar y
-WhatsApp, porque simular esas integraciones daría una falsa sensación de que
+correo, porque simular esas integraciones daría una falsa sensación de que
 funcionan. Una compilación de producción con `VITE_DATA_MODE=mock` es rechazada
 por la propia aplicación.
 
@@ -121,12 +121,12 @@ src/
   state/         Sesión, disponibilidad en vivo y carga asíncrona
   components/    Navegación, rutas protegidas y biblioteca de interfaz
   pages/         Pantallas públicas, de usuario y panel de administración
-  test/          Pruebas de integración de Google Calendar y Twilio
+  test/          Pruebas de integración de Google Calendar y del correo
 
 supabase/
   migrations/    Esquema, funciones, RLS, Realtime, series, despacho, canal de correo,
-                 rol general y avisos de cupo (12 migraciones ordenadas)
-  functions/     8 Edge Functions + módulos compartidos en _shared/
+                 rol general, avisos de cupo y retirada de WhatsApp (13 migraciones ordenadas)
+  functions/     7 Edge Functions + módulos compartidos en _shared/
   tests/         Pruebas SQL de esquema, reservas, cancelaciones, RLS e integraciones
   cron/          Programación de tareas con pg_cron (se ejecuta una vez por entorno)
   seed.sql       Datos de ejemplo para desarrollo
@@ -155,13 +155,13 @@ sobre `public.reservations`. La única vía son dos funciones `SECURITY DEFINER`
 se encolan trabajos en `calendar_sync_jobs` y `notification_jobs` con una clave
 de idempotencia determinística. Dos workers (Edge Functions) los consumen con
 `FOR UPDATE SKIP LOCKED`, reintentos con retroceso exponencial y tope de
-intentos. Si Google o Twilio fallan, la reserva sigue siendo válida y sólo
+intentos. Si Google o el proveedor de correo fallan, la reserva sigue siendo válida y sólo
 cambia su estado informativo.
 
 **Los secretos viven en el backend.** El navegador sólo conoce la URL del
 proyecto y la clave `anon`. Los tokens de Google se guardan cifrados con
 AES-256-GCM y sus columnas no tienen privilegio de lectura para ningún rol del
-cliente. Twilio se invoca exclusivamente desde una Edge Function.
+cliente. El proveedor de correo se invoca exclusivamente desde una Edge Function.
 
 Detalle completo en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 
@@ -178,9 +178,8 @@ Detalle completo en [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
 | [REQUISITOS_IMPLEMENTADOS.md](docs/REQUISITOS_IMPLEMENTADOS.md) | Matriz REQ-1 a REQ-33 con la evidencia de cada requisito |
 | [CONFIGURACION_SUPABASE.md](docs/CONFIGURACION_SUPABASE.md) | Proyecto, migraciones, Auth, Realtime y secretos |
 | [CONFIGURACION_CORREO.md](docs/CONFIGURACION_CORREO.md) | Confirmación y recuperación por código, SMTP propio, correo institucional |
-| [ALTERNATIVAS_PROVEEDORES.md](docs/ALTERNATIVAS_PROVEEDORES.md) | Alternativas gratuitas a Twilio para correo y WhatsApp, y qué cuesta cada una |
+| [ALTERNATIVAS_PROVEEDORES.md](docs/ALTERNATIVAS_PROVEEDORES.md) | La evaluación de proveedores que llevó a retirar WhatsApp y quedarse con el correo |
 | [CONFIGURACION_GOOGLE_CALENDAR.md](docs/CONFIGURACION_GOOGLE_CALENDAR.md) | Google Cloud, OAuth, pantalla de consentimiento, verificación |
-| [CONFIGURACION_TWILIO_WHATSAPP.md](docs/CONFIGURACION_TWILIO_WHATSAPP.md) | Cuenta, sandbox, producción, plantillas y webhook |
 | [DESPLIEGUE_AWS.md](docs/DESPLIEGUE_AWS.md) | S3, CloudFront, HTTPS, dominio, caché e invalidación |
 | [OPERACION.md](docs/OPERACION.md) | Tareas programadas, monitoreo, registros, recuperación y rollback |
 | [PRUEBAS.md](docs/PRUEBAS.md) | Qué cubre cada suite y cómo ejecutarlas |
@@ -195,7 +194,7 @@ Documento de requerimientos de origen:
 
 ## Camino a producción
 
-1. **Crear las cuentas externas**: Supabase, Google Cloud, Twilio y AWS.
+1. **Crear las cuentas externas**: Supabase, Google Cloud, Brevo y AWS.
 2. **Cargar las credenciales** en los gestores seguros correspondientes
    (`scripts/set-secrets.sh` para Supabase; variables de entorno o el gestor de
    secretos del pipeline para AWS).
@@ -215,4 +214,4 @@ Proyecto desarrollado para Deportes UC. Los datos personales de las personas
 usuarias (correo y teléfono) se tratan conforme a las políticas de protección de
 datos de la institución: no se exponen en el cliente web, no son visibles para
 otras personas usuarias ni para el personal administrativo, y las notificaciones
-por WhatsApp requieren consentimiento explícito y revocable.
+por correo requieren consentimiento explícito y revocable.

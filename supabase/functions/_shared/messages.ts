@@ -1,17 +1,10 @@
 /**
- * Plantillas de mensajes de WhatsApp, íntegramente en español.
+ * Textos de las notificaciones de ActivaUC, íntegramente en español.
  *
- * En producción con WhatsApp Business los mensajes salientes iniciados
- * por la plataforma deben usar una plantilla aprobada. Por eso cada tipo
- * de mensaje puede resolverse de dos maneras:
- *
- *   1. ContentSid aprobado (TWILIO_CONTENT_SID_CONFIRMACION, …) junto con
- *      las variables numeradas de la plantilla. Es el camino de producción.
- *   2. Cuerpo de texto plano, válido en el Sandbox de Twilio y durante la
- *      ventana de 24 horas de servicio al cliente.
- *
- * El texto y el orden de las variables deben coincidir exactamente con la
- * plantilla registrada en Twilio (ver docs/CONFIGURACION_TWILIO_WHATSAPP.md).
+ * Un solo sitio donde se decide qué dice la plataforma en cada aviso:
+ * `buildBody` da el texto, `buildSubject` el asunto y `buildEmailHtml`
+ * la envoltura mínima del correo. Tenerlo junto evita que el asunto
+ * prometa una cosa y el cuerpo diga otra.
  */
 
 export type NotificationKind =
@@ -64,126 +57,12 @@ export function buildBody(kind: NotificationKind, ctx: MessageContext): string {
   }
 }
 
-/** Campos del contexto que pueden ocupar una variable de la plantilla. */
-export const CAMPOS_PLANTILLA = ["nombre", "recinto", "fechaHora", "motivo"] as const;
-export type CampoPlantilla = typeof CAMPOS_PLANTILLA[number];
-
-/** Palabras que indican que la plantilla no lleva ninguna variable. */
-const SIN_VARIABLES = new Set(["ninguna", "ninguno", "none", "sin"]);
-
-/** Orden de variables por omisión de cada tipo de mensaje. */
-function ordenPorOmision(kind: NotificationKind): CampoPlantilla[] {
-  const base: CampoPlantilla[] = ["nombre", "recinto", "fechaHora"];
-  return kind === "cancelacion_admin" ? [...base, "motivo"] : base;
-}
-
-/**
- * El aviso de cupo liberado no tiene plantilla propia en Twilio: usa la
- * de confirmación si está configurada, porque su contenido es del mismo
- * tipo —recinto y horario— y crear una cuarta plantilla aprobada por
- * Meta para esto sería trabajo sin ganancia. Por correo, en cambio, sí
- * tiene su propio asunto y cuerpo.
- */
-
-function valorDeCampo(campo: CampoPlantilla, ctx: MessageContext): string {
-  switch (campo) {
-    case "nombre":
-      return ctx.nombre;
-    case "recinto":
-      return ctx.recinto;
-    case "fechaHora":
-      return ctx.fechaHora;
-    case "motivo":
-      return ctx.motivo ?? "mantención del recinto";
-  }
-}
-
-/**
- * Variables numeradas que espera la plantilla aprobada equivalente.
- *
- * `orden` permite adaptarse a la plantilla sin tocar el código, que hace
- * falta por dos motivos reales:
- *
- *   · Las plantillas de muestra de Twilio (las únicas disponibles en una
- *     cuenta Trial) traen el texto fijo y no aceptan variable alguna;
- *     enviarles tres provoca un 63028.
- *   · Una plantilla aprobada por Meta puede quedar con las variables en
- *     otro orden que el de docs/CONFIGURACION_TWILIO_WHATSAPP.md § 4.
- *
- * Formatos aceptados:
- *   · vacío o ausente → el orden por omisión del tipo de mensaje.
- *   · «ninguna» → sin variables (devuelve null).
- *   · «recinto,nombre,fechaHora» → ese orden exacto.
- *
- * Un nombre de campo desconocido lanza: es un error de configuración, y
- * es mejor que el trabajo falle con un mensaje claro que enviar un
- * mensaje con los datos en el lugar equivocado.
- */
-export function buildContentVariables(
-  kind: NotificationKind,
-  ctx: MessageContext,
-  orden?: string | null,
-): Record<string, string> | null {
-  const crudo = (orden ?? "").trim();
-
-  if (crudo && SIN_VARIABLES.has(crudo.toLowerCase())) {
-    return null;
-  }
-
-  const campos: CampoPlantilla[] = crudo
-    ? crudo.split(",").map((parte) => {
-      const campo = parte.trim();
-      if (!(CAMPOS_PLANTILLA as readonly string[]).includes(campo)) {
-        throw new Error(
-          `Campo de plantilla desconocido: «${campo}». Admitidos: ` +
-            `${CAMPOS_PLANTILLA.join(", ")}, o «ninguna» para una plantilla sin variables.`,
-        );
-      }
-      return campo as CampoPlantilla;
-    })
-    : ordenPorOmision(kind);
-
-  if (campos.length === 0) return null;
-
-  const vars: Record<string, string> = {};
-  campos.forEach((campo, i) => {
-    vars[String(i + 1)] = valorDeCampo(campo, ctx);
-  });
-  return vars;
-}
-
-/** Nombre de la variable de entorno con el orden de variables. */
-export function contentVarsEnvVar(kind: NotificationKind): string {
-  switch (kind) {
-    case "confirmacion":
-    case "cupo_liberado":
-      return "TWILIO_CONTENT_VARS_CONFIRMACION";
-    case "recordatorio":
-      return "TWILIO_CONTENT_VARS_RECORDATORIO";
-    case "cancelacion_admin":
-      return "TWILIO_CONTENT_VARS_CANCELACION";
-  }
-}
-
-/** Nombre de la variable de entorno con el ContentSid de cada plantilla. */
-export function contentSidEnvVar(kind: NotificationKind): string {
-  switch (kind) {
-    case "confirmacion":
-    case "cupo_liberado":
-      return "TWILIO_CONTENT_SID_CONFIRMACION";
-    case "recordatorio":
-      return "TWILIO_CONTENT_SID_RECORDATORIO";
-    case "cancelacion_admin":
-      return "TWILIO_CONTENT_SID_CANCELACION";
-  }
-}
-
 // =====================================================================
-// Canal de correo
+// Envoltura del correo
 // ---------------------------------------------------------------------
-// El texto es el mismo que va por WhatsApp: una sola fuente de verdad
-// para lo que dice la plataforma. Lo que añade el correo es asunto y
-// una envoltura HTML mínima.
+// El texto de `buildBody` es el mismo que se registra en la bitácora:
+// una sola fuente de verdad para lo que dice la plataforma. Lo que añade
+// el correo es el asunto y una envoltura HTML mínima.
 // =====================================================================
 
 export function buildSubject(kind: NotificationKind, ctx: MessageContext): string {

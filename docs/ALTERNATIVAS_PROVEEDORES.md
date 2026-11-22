@@ -1,5 +1,11 @@
 # Alternativas a Twilio
 
+> **Este documento es el registro de una decisión ya tomada.** El canal de
+> WhatsApp se retiró del producto y las notificaciones salen sólo por
+> correo. Lo que sigue se conserva porque explica **por qué**: qué
+> bloqueaba cada proveedor, qué costaba cada salida y qué se evaluó antes
+> de decidir. Nada de aquí describe el sistema actual.
+
 Consultado el **16/10/2026**. Los planes gratuitos cambian seguido y
 varias de las cifras de abajo vienen de comparativas de terceros que se
 contradicen entre sí, así que **confirma en la página de precios del
@@ -135,6 +141,13 @@ externo.
    más barato que Twilio y quita la restricción de las plantillas de
    muestra, pero hay que aceptar un costo por mensaje del orden de USD
    0,0034.
+
+   **Lo que se decidió finalmente:** retirar el canal. El correo cubre la
+   misma necesidad —confirmación, recordatorio, aviso de cancelación y
+   aviso de cupo— sin costo por mensaje, sin plantillas que un tercero
+   tenga que aprobar y sin la ventana de 24 horas. El trabajo de
+   migración a Meta eran 250–300 líneas y un trámite de aprobación, para
+   un aviso que ya llegaba por otra vía.
 
 ---
 

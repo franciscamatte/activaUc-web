@@ -2,7 +2,7 @@
 # =====================================================================
 # ActivaUC · despliegue de Edge Functions
 # ---------------------------------------------------------------------
-# Despliega las ocho funciones del backend respetando la verificación
+# Despliega las siete funciones del backend respetando la verificación
 # de JWT que cada una necesita (definida en supabase/config.toml).
 #
 # Uso:
@@ -38,7 +38,7 @@ done
 # Funciones y su política de verificación de JWT.
 #   true  → exige un usuario autenticado
 #   false → endpoint público que se autentica por su cuenta (state
-#           firmado de OAuth, firma de Twilio, encabezado x-cron-secret)
+#           firmado de OAuth, encabezado x-cron-secret)
 # ---------------------------------------------------------------------
 declare -A FUNCIONES=(
   [google-oauth-start]=true
@@ -47,7 +47,6 @@ declare -A FUNCIONES=(
   [crear-administrador]=true
   [process-calendar-jobs]=false
   [process-notification-jobs]=false
-  [twilio-status-webhook]=false
   [cron-dispatch]=false
 )
 
@@ -91,7 +90,6 @@ ORDEN=(
   crear-administrador
   process-calendar-jobs
   process-notification-jobs
-  twilio-status-webhook
   cron-dispatch
 )
 

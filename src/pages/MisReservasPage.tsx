@@ -13,7 +13,7 @@ import Modal from "../components/ui/Modal";
 import {
   InsigniaCalendario,
   InsigniaReserva,
-  InsigniaWhatsapp,
+  InsigniaNotificacion,
 } from "../components/ui/Insignia";
 import { Cargando, ErrorConReintento, SinDatos } from "../components/ui/Estados";
 
@@ -188,13 +188,13 @@ export default function MisReservasPage() {
                   {/* REQ-21 / REQ-27 · estado real de las integraciones */}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <InsigniaCalendario estado={reserva.calendarSync} />
-                    <InsigniaWhatsapp
-                      estado={reserva.whatsappConfirmacion}
+                    <InsigniaNotificacion
+                      estado={reserva.notificacionConfirmacion}
                       prefijo="Confirmación"
                     />
-                    {reserva.whatsappRecordatorio !== "omitido" ? (
-                      <InsigniaWhatsapp
-                        estado={reserva.whatsappRecordatorio}
+                    {reserva.notificacionRecordatorio !== "omitido" ? (
+                      <InsigniaNotificacion
+                        estado={reserva.notificacionRecordatorio}
                         prefijo="Recordatorio"
                       />
                     ) : null}

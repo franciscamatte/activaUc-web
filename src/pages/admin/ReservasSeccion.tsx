@@ -12,7 +12,7 @@ import { CampoSelect, CampoTextarea } from "../../components/ui/Campo";
 import Insignia, {
   InsigniaCalendario,
   InsigniaReserva,
-  InsigniaWhatsapp,
+  InsigniaNotificacion,
 } from "../../components/ui/Insignia";
 import Modal from "../../components/ui/Modal";
 import { Cargando, ErrorConReintento, SinDatos } from "../../components/ui/Estados";
@@ -57,9 +57,9 @@ export default function ReservasSeccion({ repositorio, recintos }: Props) {
       }
 
       setAviso(
-        resultado.notificacionWhatsapp
-          ? "Reserva cancelada. El cupo quedó libre y encolamos el aviso por WhatsApp al usuario."
-          : "Reserva cancelada y cupo liberado. El usuario no tiene WhatsApp habilitado, así que no se envió aviso.",
+        resultado.notificacionEncolada
+          ? "Reserva cancelada. El cupo quedó libre y encolamos el aviso por correo al usuario."
+          : "Reserva cancelada y cupo liberado. El usuario no tiene los avisos activados, así que no se envió ninguno.",
       );
       setACancelar(null);
       setMotivo("");
@@ -184,7 +184,7 @@ export default function ReservasSeccion({ repositorio, recintos }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex flex-col items-start gap-1.5">
                         <InsigniaCalendario estado={reserva.calendarSync} />
-                        <InsigniaWhatsapp estado={reserva.whatsappEstado} />
+                        <InsigniaNotificacion estado={reserva.notificacionEstado} />
                       </div>
                     </td>
 
@@ -216,7 +216,7 @@ export default function ReservasSeccion({ repositorio, recintos }: Props) {
       <Modal
         abierto={aCancelar !== null}
         titulo="Cancelar reserva de un usuario"
-        descripcion="El cupo se libera de inmediato y el usuario recibirá un aviso si habilitó WhatsApp."
+        descripcion="El cupo se libera de inmediato y el usuario recibirá un aviso si activó los avisos por correo."
         onCerrar={() => setACancelar(null)}
         acciones={
           <>

@@ -7,7 +7,7 @@
  *     transaccionales y validan identidad y rol en el servidor.
  *   · La disponibilidad pública se lee de la vista block_availability,
  *     que sólo expone agregados.
- *   · Las integraciones (OAuth de Google, WhatsApp) se operan mediante
+ *   · Las integraciones (OAuth de Google, correo) se operan mediante
  *     Edge Functions; el navegador nunca ve una credencial externa.
  */
 
@@ -17,7 +17,7 @@ import { conReintentos } from "../lib/retry";
 import { config } from "../lib/env";
 import { invocarFuncion } from "../lib/supabase";
 import { dentroDelRangoHorario } from "../domain/reservationRules";
-import { normalizarTelefono } from "../domain/phone";
+import { esE164, normalizarTelefono } from "../domain/phone";
 import {
   MENSAJE_CODIGO_INVALIDO,
   codigoTieneFormato,
@@ -82,8 +82,8 @@ interface RespuestaCrearReserva {
   error?: string;
   mensaje: string;
   calendar_sync_status?: EstadoSincronizacion;
-  whatsapp_confirmacion?: string;
-  whatsapp_recordatorio?: string;
+  notificacion_confirmacion?: string;
+  notificacion_recordatorio?: string;
   recordatorio_programado_para?: string | null;
   cupos_disponibles?: number;
 }
@@ -120,7 +120,7 @@ interface RespuestaCancelar {
   error?: string;
   mensaje: string;
   cancelado_por?: Rol;
-  notificacion_whatsapp?: boolean;
+  notificacion_encolada?: boolean;
 }
 
 export class SupabaseRepository implements ActivaRepository {
@@ -293,7 +293,7 @@ export class SupabaseRepository implements ActivaRepository {
       const { data, error } = await this.cliente
         .from("profiles")
         .select(
-          "id, full_name, phone, whatsapp_consent, whatsapp_consent_at, " +
+          "id, full_name, phone, " +
             "email_consent, email_consent_at, role",
         )
         .eq("id", sesion.usuarioId)
@@ -477,32 +477,39 @@ export class SupabaseRepository implements ActivaRepository {
     };
   }
 
-  async definirConsentimientoWhatsapp(
+  /**
+   * REQ-7 · el teléfono se escribe como el nombre: una columna del
+   * propio perfil, con la política RLS de siempre. Antes pasaba por la
+   * función del consentimiento del canal retirado.
+   */
+  async actualizarTelefono(
     telefono: string | null,
-    consentido: boolean,
   ): Promise<{ ok: boolean; mensaje: string }> {
-    await this.exigirSesion();
+    const sesion = await this.exigirSesion();
 
-    const { data, error } = await this.cliente.rpc("set_whatsapp_consent", {
-      _phone: consentido ? normalizarTelefono(telefono ?? "") : null,
-      _consent: consentido,
-    });
+    const limpio = telefono === null || telefono.trim() === ""
+      ? null
+      : normalizarTelefono(telefono);
 
-    if (error) throw aAppError(error, "guardar tus preferencias de WhatsApp");
-
-    const respuesta = data as { ok: boolean; mensaje?: string; error?: string };
-    if (!respuesta.ok) {
+    if (limpio !== null && !esE164(limpio)) {
       return {
         ok: false,
-        mensaje: respuesta.mensaje ?? "No pudimos guardar tus preferencias de WhatsApp.",
+        mensaje: "El teléfono debe tener formato internacional, por ejemplo +56912345678.",
       };
     }
 
+    const { error } = await this.cliente
+      .from("profiles")
+      .update({ phone: limpio })
+      .eq("id", sesion.usuarioId);
+
+    if (error) throw aAppError(error, "guardar tu teléfono");
+
     return {
       ok: true,
-      mensaje: consentido
-        ? "Registramos tu número. Recibirás confirmaciones y recordatorios por WhatsApp."
-        : "Eliminamos tu número y revocamos el consentimiento. No recibirás más mensajes.",
+      mensaje: limpio === null
+        ? "Borramos tu teléfono."
+        : "Guardamos tu teléfono.",
     };
   }
 
@@ -653,8 +660,8 @@ export class SupabaseRepository implements ActivaRepository {
       error: r.error,
       mensaje: r.mensaje,
       calendarSync: r.calendar_sync_status,
-      whatsappConfirmacion: r.whatsapp_confirmacion,
-      whatsappRecordatorio: r.whatsapp_recordatorio,
+      notificacionConfirmacion: r.notificacion_confirmacion,
+      notificacionRecordatorio: r.notificacion_recordatorio,
       recordatorioProgramadoPara: r.recordatorio_programado_para ?? null,
       cuposDisponibles: r.cupos_disponibles,
     };
@@ -678,7 +685,7 @@ export class SupabaseRepository implements ActivaRepository {
       error: r.error,
       mensaje: r.mensaje,
       canceladoPor: r.cancelado_por,
-      notificacionWhatsapp: r.notificacion_whatsapp,
+      notificacionEncolada: r.notificacion_encolada,
     };
   }
 

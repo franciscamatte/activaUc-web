@@ -4,7 +4,7 @@ ActivaUC tiene tres suites, cada una verificando algo que las otras no pueden.
 
 | Suite | Comando | Qué necesita | Qué cubre |
 |---|---|---|---|
-| Unitarias e integración | `npm run test` | Nada | Reglas de negocio, errores, reintentos, criptografía, Google Calendar y Twilio con `fetch` simulado, repositorio completo |
+| Unitarias e integración | `npm run test` | Nada | Reglas de negocio, errores, reintentos, criptografía, Google Calendar y el proveedor de correo con `fetch` simulado, repositorio completo |
 | Base de datos | `npm run test:db` | PostgreSQL | Esquema, privilegios, RLS con roles reales, funciones transaccionales, colas |
 | Concurrencia | `npm run test:concurrency` | PostgreSQL | Sin sobrecupos ni duplicados con solicitudes simultáneas reales |
 
@@ -21,15 +21,14 @@ npm run test           # una vez
 npm run test:watch     # en modo observador
 ```
 
-**276 pruebas en 12 archivos.** Corren en entorno Node, sin DOM simulado: lo que
+**235 pruebas en 11 archivos.** Corren en entorno Node, sin DOM simulado: lo que
 se verifica son reglas e integraciones, no renderizado.
 
 | Archivo | Pruebas | Qué verifica |
 |---|---|---|
 | `src/data/mockRepository.test.ts` | 82 | Recorrido completo: registro, sesión, perfil, consentimiento, filtros, reservar, duplicados, agotamiento, cancelaciones, administración, avisos de cupo y administrador general (incluida la creación de cuentas) |
-| `src/test/twilioWhatsapp.test.ts` | 40 | Envío con plantilla y con texto libre, validación de destino, códigos de error, **validación de la firma del webhook**, plantillas en español |
 | `src/domain/reservationRules.test.ts` | 35 | Selección de bloques, ventana de 2 h de cancelación (incluido el límite exacto), exención de los dos roles de administración, regla del recordatorio, separación vigentes/pasadas, filtro por rango horario con zona horaria, validación de bloques |
-| `src/test/oauthCrypto.test.ts` | 24 | Cifrado AES-256-GCM de tokens, detección de manipulación, firma del `state`, intento de suplantación de usuario, id determinístico de evento |
+| `src/test/oauthCrypto.test.ts` | 23 | Cifrado AES-256-GCM de tokens, detección de manipulación, firma del `state`, intento de suplantación de usuario, id determinístico de evento |
 | `src/test/googleCalendar.test.ts` | 23 | Permisos mínimos, intercambio de código, renovación, idempotencia por `409`, tolerancia a `404`/`410`, clasificación de errores |
 | `src/lib/errors.test.ts` | 21 | Traducción de cada error de Supabase y PostgreSQL, clasificación (sesión expirada, sin conexión, permisos, límite), y que ningún mensaje contenga palabras en inglés |
 | `src/domain/phone.test.ts` | 20 | Formato E.164, normalización, mensajes de ayuda en español, enmascarado |
@@ -53,12 +52,12 @@ se verifica son reglas e integraciones, no renderizado.
 
 ### Lo que no demuestran
 
-No hay pruebas contra las APIs reales de Google ni de Twilio: eso requiere
+No hay pruebas contra las APIs reales de Google ni de Brevo: eso requiere
 cuentas con credenciales productivas. El `fetch` simulado verifica el contrato
 (qué se envía, cómo se interpreta cada respuesta), no que el servicio remoto se
 comporte como se documenta. Los pasos de verificación con las cuentas reales
 están en `CONFIGURACION_GOOGLE_CALENDAR.md` § 6 y
-`CONFIGURACION_TWILIO_WHATSAPP.md` § 7.
+`CONFIGURACION_CORREO.md` § 6.1.
 
 Tampoco hay pruebas de renderizado de componentes. Se omitieron a propósito:
 habrían exigido `@testing-library/react` y un DOM simulado para verificar menos
@@ -110,12 +109,12 @@ sobre una base vacía, que es lo que hará `supabase db push`.
 |---|---|
 | `10_schema.sql` | Las 14 tablas; RLS activa en todas; índice único de duplicados; disparadores de `updated_at`; que **toda** función `SECURITY DEFINER` fije `search_path`; restricciones de datos personales; **que ninguna función de `public` sea ejecutable por `anon`**; que las columnas de tokens no sean legibles; alta automática de perfil |
 | `20_reservations.sql` | Capacidad, duplicados, agotamiento con fallo limpio; bloques pasados, inactivos y de recintos inactivos; **regla exacta del recordatorio de 2 h**; idempotencia de la cola de Calendar; límite de solicitudes por usuario |
-| `30_cancellations.sql` | Ventana de 2 h; cancelación de reserva ajena (debe fallar); reserva iniciada y vencida; idempotencia de cancelar dos veces; administrador no asignado (debe fallar); administrador asignado sin ventana; aviso por WhatsApp; cupo liberado disponible al instante; encolado de eliminación de eventos en sus dos casos |
+| `30_cancellations.sql` | Ventana de 2 h; cancelación de reserva ajena (debe fallar); reserva iniciada y vencida; idempotencia de cancelar dos veces; administrador no asignado (debe fallar); administrador asignado sin ventana; aviso por correo; cupo liberado disponible al instante; encolado de eliminación de eventos en sus dos casos |
 | `40_rls.sql` | Con los roles `anon` y `authenticated` **reales**: disponibilidad pública sin datos personales; aislamiento de perfiles y reservas; imposibilidad de escribir en `reservations`; imposibilidad de escalar el rol; tokens OAuth inaccesibles; administrador acotado a sus recintos; colas y webhooks reservados al backend; y una comprobación final de que ningún intento de escritura cruzada surtió efecto |
-| `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad de WhatsApp; **idempotencia del webhook y no retroceso de «entregado»**; reintentos y fallos definitivos; revocación de consentimiento; recuperación de trabajos interrumpidos; informe de integraciones; **descartar una incidencia** retira del informe sin borrar la fila y sólo la puede descartar quien administra ese recinto |
+| `50_integrations.sql` | Reclamo de trabajos, retroceso exponencial, tope de intentos; sincronización exitosa; trazabilidad del envío; **el proveedor no informa la entrega, así que `enviado` es el estado final**; reintentos y fallos definitivos; revocación y reactivación del consentimiento; recuperación de trabajos interrumpidos; informe de integraciones; **descartar una incidencia** retira del informe sin borrar la fila y sólo la puede descartar quien administra ese recinto |
 | `60_block_series.sql` | Creación de series (REQ-30): autorización sólo al administrador asignado; validaciones que rechazan antes de escribir; vista previa que cuenta sin escribir; serie diaria y por días de la semana **en hora local de Santiago**; repetir la serie no duplica; extender respeta lo publicado; bloques en el pasado omitidos sin fallar; desactivación en serie que conserva las reservas confirmadas |
 | `70_despacho_inmediato.sql` | Los cuatro disparadores de despacho existen y son **por sentencia**; reservar y cancelar siguen funcionando con ellos puestos; y, lo que importa, **un fallo del despacho no impide reservar**: el trabajo queda encolado para que lo recoja el cron |
-| `80_canal_correo.sql` | El canal de correo no se cruza con WhatsApp: consentimientos independientes (el correo no exige teléfono); con un solo canal consentido no se encola el otro; con ambos, **dos trabajos por aviso** con claves de idempotencia distintas y la de WhatsApp conservando su prefijo histórico; revocar un canal descarta lo suyo y **no toca** lo del otro; el reclamo resuelve el destino de cada canal y la bitácora guarda sólo el dominio del correo; canal y destino restringidos por `check` |
+| `80_canal_correo.sql` | El canal de correo: el consentimiento no exige teléfono; la reserva encola un trabajo por aviso con claves de idempotencia distintas y el prefijo `em:` estable; revocar descarta lo encolado y **no toca** la reserva; el reclamo resuelve el destino y la bitácora guarda sólo el dominio; el canal retirado se rechaza en filas nuevas |
 | `90_administrador_general.sql` | El rol de administrador general (REQ-29): que se pueda conceder **sin recintos** y que el primero que cree esa persona quede a su cargo, sin alcanzar los ajenos; que sólo él asigne administradores, que un usuario común y un administrador de recintos no puedan; que **no** pueda cambiar su propio rol, degradar a otro general ni conceder el rol general —ni por la función ni por una escritura directa—; que un recinto inexistente se informe sin dejar el rol a medias; que alcance recintos que no tiene asignados y pueda cancelar sin la ventana de 2 h; y que el listado esté acotado a él |
 | `95_aviso_cupo_liberado.sql` | El aviso de cupo (SC-2): que sólo se pida sobre bloques llenos, futuros y sin reserva propia; que una cancelación avise a quien esperaba, encolando con `block_id` y sin reserva; que **no** avise dos veces, ni por una segunda cancelación ni por una actualización posterior; que sin canal consentido la solicitud se consuma igual para no reaparecer; y que cada persona gestione sólo las suyas |
 
@@ -334,7 +333,7 @@ corredor, así que sirven para documentar qué se comprobó.
 
 Simula `fetch` con `vi.stubGlobal` y verifica **lo que se envía** y **cómo se
 interpreta cada respuesta**, incluidos los errores. Lo valioso está en los
-casos límite: el `409` de Google, el `63003` de Twilio, la firma inválida. Ver
+casos límite: el `409` de Google, el rechazo del proveedor de correo. Ver
 `src/test/googleCalendar.test.ts` como referencia.
 
 ---
@@ -369,7 +368,7 @@ paralelo:
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, las 276 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, las 235 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la prueba de concurrencia contra un PostgreSQL 16 real |
 
 El trabajo `base` aplica las migraciones en orden sobre una base vacía,

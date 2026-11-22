@@ -7,7 +7,7 @@ import {
 /**
  * Canal de correo por Brevo, con `fetch` simulado.
  *
- * Reemplazó al de Twilio porque en el plan de prueba de éste el
+ * Es el único canal de notificaciones: el de WhatsApp se retiró. El
  * contenido tiene que coincidir con una plantilla de muestra y cada
  * destinatario tiene que estar verificado (error 574002). Lo que se
  * verifica aquí es lo que protege a la plataforma: que la petición

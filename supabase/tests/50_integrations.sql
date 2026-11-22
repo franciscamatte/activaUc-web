@@ -108,10 +108,10 @@ do $$
 declare
   _u uuid; _fac uuid; _blk uuid; _res uuid; _job record; _n int;
 begin
-  -- Cola de WhatsApp: consentimiento, reintentos y trazabilidad.
+  -- Cola de notificaciones: consentimiento, reintentos y trazabilidad.
   _u := test_helpers.create_user('i3@uc.cl', 'Vale Mensaje');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56933333333', true);
+  perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type) values ('Recinto Cola 50c', 'Pádel') returning id into _fac;
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
@@ -127,47 +127,29 @@ begin
   assert (select status from public.notification_jobs where reservation_id = _res and kind = 'recordatorio') = 'pendiente',
     'El recordatorio no debía reclamarse todavía';
 
-  -- Envío exitoso: trazabilidad en whatsapp_messages (REQ-27).
+  -- Envío exitoso: trazabilidad en notification_messages (REQ-27).
   select * into _job from public.notification_jobs
   where reservation_id = _res and kind = 'confirmacion';
-  perform public.complete_notification_job(_job.id, 'SM_PRUEBA_0001', '+56933333333');
+  perform public.complete_notification_job(_job.id, 'SM_PRUEBA_0001', 'i3@uc.cl');
 
-  assert (select status from public.whatsapp_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'enviado',
+  assert (select status from public.notification_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'enviado',
     'No se registró el mensaje como enviado';
-  assert (select kind from public.whatsapp_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'confirmacion',
+  assert (select kind from public.notification_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'confirmacion',
     'El tipo de mensaje registrado es incorrecto';
   assert exists (
     select 1 from public.reservation_audit_log
-    where reservation_id = _res and action = 'whatsapp_enviado'
+    where reservation_id = _res and action = 'notificacion_enviada'
   ), 'Falta la auditoría del envío';
 
-  -- ---------------------------------------------------------------
-  -- REQ-27 · webhook de Twilio: idempotencia y transición de estados
-  -- ---------------------------------------------------------------
-  assert public.register_webhook_event('twilio', 'SM_PRUEBA_0001', 'delivered', true, '{}'::jsonb),
-    'El primer evento del webhook debía registrarse';
-  assert public.apply_whatsapp_status('SM_PRUEBA_0001', 'delivered', null),
-    'No se aplicó el estado entregado';
-  assert (select status from public.whatsapp_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'entregado',
-    'El mensaje no quedó como entregado';
-  assert (select delivered_at is not null from public.whatsapp_messages
+  -- El proveedor de correo no informa la entrega: su API es asíncrona y
+  -- no tiene webhook de estados. Así que 'enviado' es el estado final de
+  -- un envío correcto, y eso se comprueba en lugar de dar por hecho un
+  -- 'entregado' que nadie puede fijar.
+  assert (select delivered_at is null from public.notification_messages
           where provider_message_sid = 'SM_PRUEBA_0001'),
-    'No se registró la fecha de entrega';
+    'Nada debería fijar la fecha de entrega: el proveedor no la informa';
 
-  -- Reentrega del mismo evento: se descarta (anti-replay).
-  assert public.register_webhook_event('twilio', 'SM_PRUEBA_0001', 'delivered', true, '{}'::jsonb) = false,
-    'Un evento repetido volvió a registrarse';
-
-  -- Un estado anterior no debe retroceder el mensaje ya entregado.
-  perform public.apply_whatsapp_status('SM_PRUEBA_0001', 'sent', null);
-  assert (select status from public.whatsapp_messages where provider_message_sid = 'SM_PRUEBA_0001') = 'entregado',
-    'El estado retrocedió de entregado a enviado';
-
-  -- Un estado desconocido se ignora sin romper nada.
-  assert public.apply_whatsapp_status('SM_PRUEBA_0001', 'estado_raro', null) = false,
-    'Un estado desconocido no debía aplicarse';
-
-  raise notice 'OK · cola de WhatsApp, trazabilidad e idempotencia del webhook';
+  raise notice 'OK · cola de notificaciones y trazabilidad del envío';
 end;
 $$;
 
@@ -178,7 +160,7 @@ begin
   -- Fallo de Twilio: reintentos y registro de fallo definitivo.
   _u := test_helpers.create_user('i4@uc.cl', 'Wenu Fallo');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56944444444', true);
+  perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type) values ('Recinto Cola 50d', 'Vóleibol') returning id into _fac;
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
@@ -192,30 +174,30 @@ begin
   perform public.fail_notification_job(_job.job_id, 'HTTP 429 de Twilio', '20429', true);
   assert (select next_attempt_at from public.notification_jobs where id = _job.job_id) > now(),
     'El backoff no retrasó el reintento del mensaje';
-  assert not exists (select 1 from public.whatsapp_messages where notification_job_id = _job.job_id),
+  assert not exists (select 1 from public.notification_messages where notification_job_id = _job.job_id),
     'Un fallo transitorio no debe registrar un mensaje fallido definitivo';
 
-  -- Fallo permanente (número sin WhatsApp): queda fallido y trazado.
-  perform public.fail_notification_job(_job.job_id, 'El número no tiene WhatsApp', '63003', false);
-  assert (select status from public.whatsapp_messages where notification_job_id = _job.job_id) = 'fallido',
+  -- Fallo permanente (dirección rechazada): queda fallido y trazado.
+  perform public.fail_notification_job(_job.job_id, 'El proveedor rechazó la dirección', 'invalid_parameter', false);
+  assert (select status from public.notification_messages where notification_job_id = _job.job_id) = 'fallido',
     'No se registró el mensaje como fallido';
-  assert (select error_code from public.whatsapp_messages where notification_job_id = _job.job_id) = '63003',
+  assert (select error_code from public.notification_messages where notification_job_id = _job.job_id) = '63003',
     'No se guardó el código de error de Twilio';
   assert exists (
     select 1 from public.reservation_audit_log
-    where reservation_id = _res and action = 'whatsapp_fallido'
+    where reservation_id = _res and action = 'notificacion_fallida'
   ), 'Falta la auditoría del fallo de envío';
 
-  -- La reserva sigue vigente: WhatsApp es informativo.
+  -- La reserva sigue vigente: el aviso es informativo.
   assert (select status from public.reservations where id = _res) = 'vigente',
-    'Un fallo de WhatsApp invalidó la reserva';
+    'Un fallo de notificación invalidó la reserva';
 
   -- Agotados los intentos, no se vuelve a reclamar.
   update public.notification_jobs set next_attempt_at = now() - interval '1 minute' where id = _job.job_id;
   select count(*) into _n from public.claim_notification_jobs(10);
   assert _n = 0, 'Se reclamó un mensaje con los intentos agotados';
 
-  raise notice 'OK · reintentos y fallos definitivos de WhatsApp';
+  raise notice 'OK · reintentos y fallos definitivos del envío';
 end;
 $$;
 
@@ -226,7 +208,7 @@ begin
   -- REQ-23 · revocar el consentimiento detiene los envíos.
   _u := test_helpers.create_user('i5@uc.cl', 'Ximena Revoca');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56955555555', true);
+  perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type) values ('Recinto Cola 50e', 'Fútbol') returning id into _fac;
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
@@ -238,11 +220,11 @@ begin
     'Debían quedar encolados la confirmación y el recordatorio';
 
   -- Revocación.
-  _r := public.set_whatsapp_consent(null, false);
-  assert (_r ->> 'ok')::boolean and (_r ->> 'consentimiento')::boolean = false,
-    format('La revocación no se aplicó: %s', _r);
-  assert (select phone is null and whatsapp_consent = false from public.profiles where id = _u),
-    'El teléfono o el consentimiento no se eliminaron';
+  _r := public.set_email_consent(false);
+  assert (_r ->> 'ok')::boolean, format('La revocación no se aplicó: %s', _r);
+  assert (select not email_consent and email_consent_at is null
+            from public.profiles where id = _u),
+    'El consentimiento no se eliminó';
 
   -- Todos los trabajos pendientes quedan cancelados.
   assert (select count(*) from public.notification_jobs
@@ -259,15 +241,18 @@ begin
   select count(*) into _n from public.claim_notification_jobs(10);
   assert _n = 0, 'Se reclamó una notificación de un usuario sin consentimiento';
 
-  -- Un teléfono inválido se rechaza con mensaje claro.
+  -- Volver a consentir reactiva el canal, sin resucitar lo cancelado:
+  -- un aviso que ya no se envió no se reintenta semanas después.
   perform test_helpers.login_as(_u);
-  _r := public.set_whatsapp_consent('912345678', true);
-  assert (_r ->> 'error') = 'telefono_invalido',
-    format('Debía rechazar un teléfono no E.164: %s', _r);
-  assert (select whatsapp_consent = false from public.profiles where id = _u),
-    'Un teléfono inválido activó el consentimiento';
+  _r := public.set_email_consent(true);
+  assert (_r ->> 'ok')::boolean, format('No se pudo volver a consentir: %s', _r);
+  assert (select email_consent from public.profiles where id = _u),
+    'El consentimiento no volvió a activarse';
+  assert (select count(*) from public.notification_jobs
+          where reservation_id = _res and status in ('pendiente', 'error')) = 0,
+    'Volver a consentir resucitó notificaciones ya canceladas';
 
-  raise notice 'OK · revocación de consentimiento y validación E.164';
+  raise notice 'OK · revocación y reactivación del consentimiento de correo';
 end;
 $$;
 
@@ -323,7 +308,7 @@ begin
   values (_u, 'conectado', 'v1.a.b', 'v1.a.b', now() + interval '1 hour');
 
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56966666666', true);
+  perform public.set_email_consent(true);
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
   values (_fac, now() + interval '6 hours', now() + interval '7 hours', 4) returning id into _blk;
   _res := (public.create_reservation_strict(_blk) ->> 'reservation_id')::uuid;
@@ -369,7 +354,7 @@ begin
   values (_u, 'conectado', 'v1.a.b', 'v1.a.b', now() + interval '1 hour');
 
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56955554444', true);
+  perform public.set_email_consent(true);
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
   values (_fac, now() + interval '8 hours', now() + interval '9 hours', 4) returning id into _blk;
   _res := (public.create_reservation_strict(_blk) ->> 'reservation_id')::uuid;
@@ -377,16 +362,16 @@ begin
   select id into _trabajo from public.calendar_sync_jobs where reservation_id = _res limit 1;
   assert _trabajo is not null, 'La reserva no encoló trabajo de Calendar';
 
-  -- La fila de whatsapp_messages la escribe el despacho, no la reserva:
+  -- La fila de notification_messages la escribe el despacho, no la reserva:
   -- se recorre ese camino para tener una incidencia de verdad.
   perform test_helpers.logout();
   perform public.claim_notification_jobs(10);
   select * into _job from public.notification_jobs
-   where reservation_id = _res and kind = 'confirmacion' and channel = 'whatsapp';
-  assert _job.id is not null, 'No se encoló la confirmación por WhatsApp';
+   where reservation_id = _res and kind = 'confirmacion' and channel = 'email';
+  assert _job.id is not null, 'No se encoló la confirmación por correo';
   perform public.complete_notification_job(_job.id, 'SM_DESCARTE_0001', '+56955554444');
 
-  select id into _mensaje from public.whatsapp_messages
+  select id into _mensaje from public.notification_messages
    where provider_message_sid = 'SM_DESCARTE_0001';
   assert _mensaje is not null, 'El despacho no registró el mensaje';
 
@@ -399,7 +384,7 @@ begin
   -- Se las deja en error, como habría quedado un fallo real.
   update public.calendar_sync_jobs set status = 'error', last_error = 'falló de prueba'
    where id = _trabajo;
-  update public.whatsapp_messages set status = 'fallido', error_message = 'falló de prueba'
+  update public.notification_messages set status = 'fallido', error_message = 'falló de prueba'
    where id = _mensaje;
 
   select count(*) into _n from public.admin_integration_report(100)
@@ -414,7 +399,7 @@ begin
 
   -- Un usuario común, tampoco.
   perform test_helpers.login_as(_u);
-  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  _r := public.admin_descartar_incidencia('notificacion', _mensaje);
   assert _r ->> 'codigo' = 'no_autorizado',
     format('Un usuario común no debería poder descartar: %s', _r);
 
@@ -422,7 +407,7 @@ begin
   perform test_helpers.login_as(_admin);
   _r := public.admin_descartar_incidencia('google_calendar', _trabajo);
   assert (_r ->> 'ok')::boolean, format('No se pudo descartar: %s', _r);
-  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  _r := public.admin_descartar_incidencia('notificacion', _mensaje);
   assert (_r ->> 'ok')::boolean, format('No se pudo descartar el mensaje: %s', _r);
 
   -- Desaparecen del informe...
@@ -435,11 +420,11 @@ begin
     select 1 from public.calendar_sync_jobs where id = _trabajo and dismissed_at is not null
   ), 'La fila del trabajo de Calendar no debería borrarse al descartarla';
   assert exists (
-    select 1 from public.whatsapp_messages where id = _mensaje and dismissed_by = _admin
+    select 1 from public.notification_messages where id = _mensaje and dismissed_by = _admin
   ), 'El mensaje no guardó quién lo descartó';
 
   -- Y no se descarta dos veces.
-  _r := public.admin_descartar_incidencia('whatsapp', _mensaje);
+  _r := public.admin_descartar_incidencia('notificacion', _mensaje);
   assert _r ->> 'codigo' = 'ya_descartada',
     format('Descartar dos veces debería informarse: %s', _r);
 

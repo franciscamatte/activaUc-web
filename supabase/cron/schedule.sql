@@ -38,7 +38,7 @@ on conflict (key) do update
 
 -- ---------------------------------------------------------------------
 -- 3) Tareas programadas.
---    · Cada minuto: workers de Google Calendar y WhatsApp. Los
+--    · Cada minuto: workers de Google Calendar y de correo. Los
 --      recordatorios se envían cuando notification_jobs.scheduled_for
 --      (= inicio - 2 h) ya venció, así que este único cron cubre REQ-25.
 --    · Cada hora: limpieza de states OAuth vencidos y contadores.

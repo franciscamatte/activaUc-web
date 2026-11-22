@@ -51,9 +51,8 @@ export interface EstadoAuth {
   recargarPerfil: () => Promise<void>;
   recargarCalendario: () => Promise<void>;
   actualizarNombre: (nombre: string) => Promise<void>;
-  definirConsentimientoWhatsapp: (
+  actualizarTelefono: (
     telefono: string | null,
-    consentido: boolean,
   ) => Promise<{ ok: boolean; mensaje: string }>;
   definirConsentimientoCorreo: (
     consentido: boolean,

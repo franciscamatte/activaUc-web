@@ -99,9 +99,7 @@ export interface Perfil {
   nombre: string;
   correo: string;
   telefono: string | null;
-  whatsappConsentido: boolean;
-  whatsappConsentidoEn: string | null;
-  /** REQ-22/REQ-23 aplicados al correo: avisos de reserva por correo. */
+  /** REQ-22/REQ-23 · consentimiento para recibir los avisos por correo. */
   correoConsentido: boolean;
   correoConsentidoEn: string | null;
   rol: Rol;
@@ -158,8 +156,8 @@ export interface Reserva {
   esPasada: boolean;
   calendarSync: EstadoSincronizacion;
   tieneEventoCalendario: boolean;
-  whatsappConfirmacion: EstadoMensaje;
-  whatsappRecordatorio: EstadoMensaje;
+  notificacionConfirmacion: EstadoMensaje;
+  notificacionRecordatorio: EstadoMensaje;
   canceladaEn: string | null;
   canceladaPorRol: Rol | null;
   motivoCancelacion: string | null;
@@ -180,7 +178,7 @@ export interface ReservaAdmin {
   usuarioNombre: string;
   calendarSync: EstadoSincronizacion;
   tieneEventoCalendario: boolean;
-  whatsappEstado: EstadoMensaje;
+  notificacionEstado: EstadoMensaje;
   canceladaPorRol: Rol | null;
   motivoCancelacion: string | null;
   creadaEn: string;
@@ -195,7 +193,7 @@ export interface ConexionCalendario {
 }
 
 export interface IncidenciaIntegracion {
-  tipo: "google_calendar" | "whatsapp";
+  tipo: "google_calendar" | "notificacion";
   referenciaId: string;
   recintoId: string;
   recintoNombre: string;
@@ -248,8 +246,8 @@ export interface ResultadoReserva {
   error?: string;
   mensaje: string;
   calendarSync?: EstadoSincronizacion;
-  whatsappConfirmacion?: string;
-  whatsappRecordatorio?: string;
+  notificacionConfirmacion?: string;
+  notificacionRecordatorio?: string;
   recordatorioProgramadoPara?: string | null;
   cuposDisponibles?: number;
 }
@@ -261,5 +259,5 @@ export interface ResultadoCancelacion {
   error?: string;
   mensaje: string;
   canceladoPor?: Rol;
-  notificacionWhatsapp?: boolean;
+  notificacionEncolada?: boolean;
 }

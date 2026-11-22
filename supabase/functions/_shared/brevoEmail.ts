@@ -1,26 +1,12 @@
 /**
- * Envío de correo por la API transaccional de Brevo.
+ * Envío de correo por la API HTTP de Brevo.
  *
- * Reemplaza a `twilioEmail.ts` como canal de notificaciones. El motivo
- * no es preferencia: en el plan de prueba de Twilio ese canal tiene dos
- * restricciones que lo dejan inservible con terceros, y las dos se
- * comprobaron contra la cuenta real:
+ * Es el único canal de notificaciones de ActivaUC: confirmaciones,
+ * recordatorios, avisos de cancelación y avisos de cupo liberado.
  *
- *   · el contenido tiene que coincidir con una plantilla de muestra
- *     («Invalid template: email content does not match any approved
- *     template»), y
- *   · sólo entrega a destinatarios verificados en la cuenta
- *     (`574002 · The recipient email address is not verified for this
- *     trial`).
- *
- * Brevo no tiene ninguna de las dos en su plan gratuito: contenido
- * propio y 300 correos al día a quien sea. Y ya está configurado para
- * los correos de autenticación de Supabase, así que no añade una cuenta
- * más que mantener.
- *
- * Se usa la API HTTP y no SMTP a propósito: las Edge Functions no
- * pueden abrir conexiones salientes en los puertos de SMTP, cosa que
- * Brevo advierte en su propia documentación.
+ * Se usa la API HTTP y no SMTP a propósito: las Edge Functions no pueden
+ * abrir conexiones salientes en los puertos de SMTP, cosa que Brevo
+ * advierte en su propia documentación.
  *
  * Ojo con las dos claves de Brevo, que se confunden: aquí va la **API
  * key** (`xkeysib-…`), no la SMTP key que usa Supabase para sus correos.

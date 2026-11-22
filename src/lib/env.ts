@@ -3,7 +3,7 @@
  *
  * Reglas (requisito 10 del encargo):
  *   · Sólo variables VITE_* llegan al navegador. Ningún secreto de
- *     backend (service role, Google, Twilio, ENCRYPTION_KEY, CRON_SECRET)
+ *     backend (service role, Google, Brevo, ENCRYPTION_KEY, CRON_SECRET)
  *     se referencia aquí ni puede acabar en el bundle.
  *   · Producción usa Supabase por defecto.
  *   · El modo mock existe sólo para desarrollo local y debe activarse de

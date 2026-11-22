@@ -82,7 +82,7 @@ policy = "oneshot"
 # Edge Functions
 # verify_jwt = true  → requieren usuario autenticado
 # verify_jwt = false → endpoints públicos que validan por su cuenta
-#                      (state firmado de OAuth, firma de Twilio,
+#                      (state firmado de OAuth,
 #                       encabezado x-cron-secret)
 # ---------------------------------------------------------------------
 [functions.google-oauth-start]
@@ -104,9 +104,6 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.process-notification-jobs]
-verify_jwt = false
-
-[functions.twilio-status-webhook]
 verify_jwt = false
 
 [functions.cron-dispatch]

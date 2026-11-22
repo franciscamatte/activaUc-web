@@ -70,10 +70,10 @@ export function InsigniaCalendario({ estado }: { estado: EstadoSincronizacion })
   );
 }
 
-/** Insignia del estado de un mensaje de WhatsApp (REQ-27). */
-export function InsigniaWhatsapp({
+/** Insignia del estado de una notificación (REQ-27). */
+export function InsigniaNotificacion({
   estado,
-  prefijo = "WhatsApp",
+  prefijo = "Aviso",
 }: {
   estado: EstadoMensaje;
   prefijo?: string;

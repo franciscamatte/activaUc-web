@@ -31,8 +31,6 @@ export interface EstadoDemo {
     rol: Rol;
     confirmado: boolean;
     telefono: string | null;
-    whatsappConsentido: boolean;
-    whatsappConsentidoEn: string | null;
     correoConsentido: boolean;
     correoConsentidoEn: string | null;
   }>;
@@ -160,8 +158,8 @@ export function crearDatosDemo(): EstadoDemo {
       esPasada: true,
       calendarSync: "no_aplica",
       tieneEventoCalendario: false,
-      whatsappConfirmacion: "omitido",
-      whatsappRecordatorio: "omitido",
+      notificacionConfirmacion: "omitido",
+      notificacionRecordatorio: "omitido",
       canceladaEn: null,
       canceladaPorRol: null,
       motivoCancelacion: null,
@@ -187,8 +185,8 @@ export function crearDatosDemo(): EstadoDemo {
         esPasada: false,
         calendarSync: "no_aplica",
         tieneEventoCalendario: false,
-        whatsappConfirmacion: "omitido",
-        whatsappRecordatorio: "omitido",
+        notificacionConfirmacion: "omitido",
+        notificacionRecordatorio: "omitido",
         canceladaEn: null,
         canceladaPorRol: null,
         motivoCancelacion: null,
@@ -207,8 +205,6 @@ export function crearDatosDemo(): EstadoDemo {
         rol: "usuario",
         confirmado: true,
         telefono: null,
-        whatsappConsentido: false,
-        whatsappConsentidoEn: null,
         correoConsentido: false,
         correoConsentidoEn: null,
       },
@@ -220,8 +216,6 @@ export function crearDatosDemo(): EstadoDemo {
         rol: "administrador",
         confirmado: true,
         telefono: null,
-        whatsappConsentido: false,
-        whatsappConsentidoEn: null,
         correoConsentido: false,
         correoConsentidoEn: null,
       },
@@ -233,8 +227,6 @@ export function crearDatosDemo(): EstadoDemo {
         rol: "administrador_general",
         confirmado: true,
         telefono: null,
-        whatsappConsentido: false,
-        whatsappConsentidoEn: null,
         correoConsentido: false,
         correoConsentidoEn: null,
       },

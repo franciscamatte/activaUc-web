@@ -7,13 +7,17 @@ mandas el enlace a tus compañeros, ¿qué les funciona y qué no?
 La respuesta corta, al **17/10/2026 por la tarde**: **todo lo esencial
 funciona para cualquiera.** Crear cuenta, reservar, cancelar y recibir
 los avisos por correo quedó resuelto esa tarde, con SMTP propio y el
-canal de notificaciones migrado a Brevo. Lo que sigue limitado es
-WhatsApp, y Google Calendar sólo si la pantalla de consentimiento está
-en *Testing*.
+canal de notificaciones migrado a Brevo. Lo único que sigue limitado es
+Google Calendar, y sólo si la pantalla de consentimiento está en
+*Testing*.
 
-Las secciones 2.1 a 2.2.1 describen problemas **ya resueltos**: se
-conservan porque explican por qué el sistema está armado así, y porque
-cualquiera que monte otro entorno se los encontrará de nuevo.
+El canal de WhatsApp se retiró del producto, así que sus límites —la
+ventana de 24 horas del Sandbox, las plantillas aprobadas por Meta— ya
+no aplican a nada.
+
+La sección 2.1 describe un problema **ya resuelto**: se conserva porque
+explica por qué el sistema está armado así, y porque cualquiera que monte
+otro entorno se lo encontrará de nuevo.
 
 ---
 
@@ -33,7 +37,7 @@ veces en un minuto.
 
 ---
 
-## 2. Los tres topes que sí estorban
+## 2. Los topes que sí estorban
 
 ### 2.1 Correo de autenticación · **es el que bloquea todo**
 
@@ -66,57 +70,7 @@ depender de la organización. Ver
 [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 3 y
 [ALTERNATIVAS_PROVEEDORES.md](ALTERNATIVAS_PROVEEDORES.md) § 3.
 
-### 2.2 WhatsApp · ventana de 24 horas por persona
-
-En el Sandbox de Twilio, cada número que vaya a recibir mensajes tiene
-que enviar el `join <dos-palabras>` al número del Sandbox, y **la ventana
-dura 24 horas** desde su último mensaje. Pasado eso, un mensaje iniciado
-por la plataforma necesita una plantilla aprobada por Meta, y la de
-muestra que usamos no lo es.
-
-Medido en este proyecto:
-
-| Cuándo | `join` | Resultado |
-|---|---|---|
-| 16/10 09:09 | 16/10 03:09, 6 h antes | **entregado** |
-| 17/10 14:26 | 16/10 03:09, 35 h antes | **fallido · 63016** |
-
-El `63016` de Twilio es exactamente eso: mensaje iniciado por la empresa
-fuera de la ventana de 24 h. El trabajo de la cola aparece `completado`
-—Twilio aceptó la petición— y el fallo lo registra el webhook de
-estados en `whatsapp_messages`. Es decir, la trazabilidad funcionó: sin
-el webhook, esto se habría visto como un envío correcto.
-
-**Cómo se levanta:** salir de Trial, dar de alta un WhatsApp Sender y
-crear las tres plantillas de
-[CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 4,
-que Meta tiene que aprobar. Mientras no, WhatsApp sólo sirve para probar,
-y sólo con quien haya hecho el `join` en las últimas 24 h.
-
-### 2.2.1 El correo de notificaciones de Twilio sólo llega a destinatarios verificados
-
-Descubierto el 17/10/2026 al reservar con una cuenta nueva: el aviso no
-llegó, y el webhook registró
-
-```
-574002 · The recipient email address is not verified for this trial
-```
-
-En el plan de prueba, la API de correo de Twilio **sólo entrega a
-direcciones que estén verificadas en la cuenta**. Es el mismo patrón que
-el `join` del Sandbox de WhatsApp: sirve para probar con uno mismo y no
-sirve para terceros.
-
-Sumado a que el contenido está limitado a plantillas de muestra (§ 2.2),
-el canal de correo vía Twilio **no es utilizable con el curso**. La
-alternativa es Brevo, que ya está configurado para los correos de
-autenticación: su API transaccional admite contenido propio y no exige
-verificar a cada destinatario. Ver
-[ALTERNATIVAS_PROVEEDORES.md](ALTERNATIVAS_PROVEEDORES.md) § 3.
-
----
-
-### 2.3 Google Calendar · 100 personas y caducidad a los 7 días
+### 2.2 Google Calendar · 100 personas y caducidad a los 7 días
 
 Depende de en qué estado esté la pantalla de consentimiento (Google Auth
 Platform → **Audience**):
@@ -138,7 +92,7 @@ pasar a *In production* aunque salga el aviso de app no verificada.
 
 ---
 
-### 2.4 El proyecto de Supabase se pausa solo
+### 2.3 El proyecto de Supabase se pausa solo
 
 En el plan gratuito, **un proyecto se pausa tras una semana sin
 actividad**. Reanudarlo es un botón en el panel, pero mientras está
@@ -164,7 +118,7 @@ tocar— así que viene de la documentación de precios de Supabase.
 
 ---
 
-### 2.5 Dos cosas caducan solas si el proyecto queda quieto
+### 2.4 Dos cosas caducan solas si el proyecto queda quieto
 
 Se juntan, y ninguna avisa:
 
@@ -188,7 +142,7 @@ de SMS o WhatsApp.
 
 ---
 
-### 2.4 Cuánto tarda en llegar un correo de notificación
+### 2.5 Cuánto tarda en llegar un correo de notificación
 
 El sistema entrega el correo al proveedor en **1 a 3 segundos** desde el
 evento (medido sobre los envíos reales del proyecto, con un disparador que
@@ -251,11 +205,9 @@ disponibilidad en vivo.
 1. **Pasar la pantalla de Google a *In production***, si quieres que tus
    compañeros conecten su calendario sin que la autorización les caduque
    cada semana. Gratis, y sigue con el tope de 100 personas.
-2. **WhatsApp**: hoy sólo funciona con quien haya hecho el `join` en las
-   últimas 24 h. Para que sirva de verdad hay que salir de Trial de
-   Twilio y que Meta apruebe las tres plantillas. Es lo único que cuesta
-   dinero, y el correo ya cubre la misma necesidad.
-3. **Vigilar las caducidades** de § 2.5 durante el periodo de
+2. **Un dominio propio verificado en Brevo**, si quieres que los avisos
+   lleguen en segundos en lugar de minutos (§ 2.5).
+3. **Vigilar las caducidades** de § 2.4 durante el periodo de
    evaluación.
 
 ---
@@ -264,4 +216,3 @@ disponibilidad en vivo.
 
 - [Supabase · Rate limits](https://supabase.com/docs/guides/auth/rate-limits) — el límite de 2 correos/hora es oficial; el valor de 30 con SMTP propio lo reportan guías de terceros, confírmalo en el panel
 - [Google · Manage App Audience](https://support.google.com/cloud/answer/15549945?hl=en) y [Unverified apps](https://support.google.com/cloud/answer/7454865?hl=en) — el tope de 100 y la caducidad de 7 días
-- [Twilio · error 63016](https://www.twilio.com/docs/api/errors/63016) — mensaje iniciado por la empresa fuera de la ventana de 24 h

@@ -13,12 +13,11 @@ monitoreo, registros, recuperación de errores y rollback.
 | Base de datos y Auth | Supabase | Caída total: no se puede reservar ni consultar |
 | Realtime | Supabase | Los cupos dejan de actualizarse al instante; el respaldo por intervalo (45 s) los mantiene al día |
 | `process-calendar-jobs` | Edge Function | Los eventos de calendario se acumulan en la cola. **Las reservas siguen siendo válidas** |
-| `process-notification-jobs` | Edge Function | Los WhatsApp se acumulan en la cola. **Las reservas siguen siendo válidas** |
-| `twilio-status-webhook` | Edge Function | Los estados de entrega quedan desactualizados. No afecta el envío |
+| `process-notification-jobs` | Edge Function | Los avisos se acumulan en la cola. **Las reservas siguen siendo válidas** |
 | `pg_cron` | PostgreSQL | Nada se procesa ni se recuerda hasta que vuelva |
 
 **Regla de diseño que conviene recordar:** ninguna falla de integración cambia
-`reservations.status`. Supabase es la fuente oficial; Calendar y WhatsApp son
+`reservations.status`. Supabase es la fuente oficial; Calendar y los avisos son
 informativos.
 
 ---
@@ -143,9 +142,9 @@ select
    where status = 'vigente' and starts_at > now())            as reservas_vigentes,
   (select count(*) from public.calendar_sync_jobs
    where status = 'error' and attempts >= max_attempts)       as calendar_fallidos,
-  (select count(*) from public.whatsapp_messages
+  (select count(*) from public.notification_messages
    where status = 'fallido'
-     and created_at > now() - interval '24 hours')            as whatsapp_fallidos;
+     and created_at > now() - interval '24 hours')            as avisos_fallidos;
 ```
 
 ### Señales que exigen atención
@@ -156,7 +155,7 @@ select
 | Trabajos `error` con `attempts >= max_attempts` | > 0 | Fallo definitivo: requiere intervención |
 | Trabajos `procesando` con `locked_at` de más de 10 min | > 0 | Un worker murió. El siguiente reclamo los rescata automáticamente |
 | `webhook_events` con `signature_valid = false` | > 0 | Alguien envía solicitudes sin firma válida, o el Auth Token cambió |
-| Tasa de entrega de WhatsApp | < 95 % | Incumple el requisito no funcional de interoperabilidad |
+| Tasa de aceptación de los envíos | < 95 % | Incumple el requisito no funcional de interoperabilidad |
 
 ```sql
 -- Trabajos atascados
@@ -166,7 +165,7 @@ where status in ('pendiente','error')
   and next_attempt_at < now() - interval '10 minutes'
   and attempts < max_attempts
 union all
-select 'whatsapp', id, status::text, attempts, next_attempt_at, last_error
+select 'correo', id, status::text, attempts, next_attempt_at, last_error
 from public.notification_jobs
 where status in ('pendiente','error')
   and greatest(scheduled_for, next_attempt_at) < now() - interval '10 minutes'
@@ -176,7 +175,7 @@ where status in ('pendiente','error')
 select 'calendar' as cola, reservation_id, attempts, last_error, updated_at
 from public.calendar_sync_jobs where status = 'error' and attempts >= max_attempts
 union all
-select 'whatsapp', reservation_id, attempts, last_error, updated_at
+select 'correo', reservation_id, attempts, last_error, updated_at
 from public.notification_jobs where status = 'error' and attempts >= max_attempts
 order by updated_at desc;
 
@@ -187,7 +186,7 @@ select
   round(100.0 * count(*) filter (where status = 'entregado')
         / nullif(count(*) filter (where status in ('entregado','fallido')), 0), 1)
     as porcentaje
-from public.whatsapp_messages where created_at > now() - interval '30 days';
+from public.notification_messages where created_at > now() - interval '30 days';
 
 -- Conexiones de Calendar que necesitan reconectarse
 select user_id, status, last_error, updated_at
@@ -234,7 +233,7 @@ ventana de propagación.
 La consecuencia práctica, al probar un cambio de integración: **si falla
 el primer intento con el error de la configuración antigua, repítelo
 antes de investigar.** Lo que distingue un caso del otro es el
-identificador del proveedor que queda en `whatsapp_messages`, que tiene
+identificador del proveedor que queda en `notification_messages`, que tiene
 forma distinta en cada uno.
 
 ---
@@ -249,7 +248,7 @@ https://supabase.com/dashboard/project/<ref>/functions/<nombre>/logs
 ```
 
 donde `<nombre>` es `cron-dispatch`, `process-calendar-jobs`,
-`process-notification-jobs`, `twilio-status-webhook` o
+`process-notification-jobs` o
 `google-oauth-callback`.
 
 La CLI no sirve para esto: `supabase functions` no tiene subcomando `logs`
@@ -262,7 +261,7 @@ Los registros son JSON con redacción obligatoria
 (`supabase/functions/_shared/log.ts`). **Nunca** contienen:
 
 - tokens de acceso o de refresco, ni códigos de autorización
-- el `client_secret` de Google ni el Auth Token de Twilio
+- el `client_secret` de Google ni la clave de Brevo
 - `ENCRYPTION_KEY` ni `CRON_SECRET`
 - teléfonos completos (sólo los últimos 4 dígitos)
 - correos completos (sólo el dominio)
@@ -299,7 +298,7 @@ update public.calendar_sync_jobs
 set status = 'pendiente', attempts = 0, next_attempt_at = now(), last_error = null
 where id = '<id>';
 
--- WhatsApp
+-- Avisos por correo
 update public.notification_jobs
 set status = 'pendiente', attempts = 0,
     next_attempt_at = now(), scheduled_for = now(), last_error = null
@@ -321,8 +320,8 @@ where status = 'error'
 ```
 
 **No reintentes los fallos definitivos.** Un `invalid_grant` significa que la
-persona revocó el acceso desde su cuenta Google; un `63003` de Twilio, que el
-número no tiene WhatsApp. Reintentar sólo consume cuota.
+persona revocó el acceso desde su cuenta Google; una dirección que el
+proveedor rechaza no mejora por insistir. Reintentar sólo consume cuota.
 
 ### Descartar lo que ya no tiene arreglo
 
@@ -334,7 +333,7 @@ botón **Descartar**, que es la vía normal. Desde la base, para varios a la vez
 
 ```sql
 -- Los fallos de la puesta en marcha, con una causa que ya no se repite
-update public.whatsapp_messages
+update public.notification_messages
 set dismissed_at = now(), dismissed_by = '<uuid del operador>'
 where status = 'fallido'
   and dismissed_at is null
@@ -491,7 +490,7 @@ Tablas que crecen de forma indefinida y conviene vigilar:
 | Tabla | Crecimiento | Limpieza |
 |---|---|---|
 | `reservation_audit_log` | Una fila por acción | Sin limpieza automática: es el registro de auditoría. Archivar al cabo de 1–2 años |
-| `whatsapp_messages` | Una fila por envío | Sin limpieza automática: es la trazabilidad exigida por REQ-27 |
+| `notification_messages` | Una fila por envío | Sin limpieza automática: es la trazabilidad exigida por REQ-27 |
 | `webhook_events` | Varias por mensaje | `cleanup_ephemeral_data` borra las de más de 90 días |
 | `oauth_states` | Una por intento de conexión | `cleanup_ephemeral_data` borra las vencidas |
 | `rate_limit_counters` | Una por usuario, acción y minuto | Limpieza oportunista + horaria |
@@ -519,7 +518,7 @@ delete from public.notification_jobs
 where status in ('completado','cancelado') and updated_at < now() - interval '90 days';
 ```
 
-Los `whatsapp_messages` **no** se borran junto con sus trabajos: la relación es
+Los `notification_messages` **no** se borran junto con sus trabajos: la relación es
 `on delete set null`, así que la trazabilidad se conserva.
 
 ---
@@ -530,7 +529,7 @@ Los `whatsapp_messages` **no** se borran junto con sus trabajos: la relación es
 |---|---|
 | «No puedo reservar» | ¿Supabase responde? ¿La persona tiene el correo confirmado? ¿El bloque tiene cupos? |
 | «Dice que no hay cupos y veo que sí» | Realtime desfasado. `select * from public.block_availability where block_id = '...';` da la verdad |
-| «No me llegó el WhatsApp» | ¿Tiene consentimiento y teléfono? ¿Hay trabajo en cola? ¿`pg_cron` corre? |
+| «No me llegó el correo» | ¿Tiene el consentimiento activo? ¿Hay trabajo en cola? ¿`pg_cron` corre? |
 | «No aparece en mi calendario» | ¿Su conexión está en `conectado`? ¿El trabajo quedó en `error`? |
 | «Me cancelaron la reserva» | `select * from public.reservation_audit_log where reservation_id = '...';` dice quién, cuándo y por qué |
 | «El sitio no carga» | CloudFront y el estado de S3. Las reservas no se han perdido |

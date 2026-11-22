@@ -42,7 +42,7 @@ do $$
 declare
   _u uuid; _fac uuid; _bloque uuid; _r jsonb;
 begin
-  -- Sólo correo: debe encolarse por correo y nada por WhatsApp.
+  -- El canal único: la reserva encola confirmación y recordatorio.
   _u := test_helpers.create_user('correo2@uc.cl', 'Beto Correo');
   perform test_helpers.login_as(_u);
   perform public.set_email_consent(true);
@@ -62,14 +62,14 @@ begin
     'Esperaba confirmación y recordatorio por correo';
   assert (select count(*) from public.notification_jobs
           where reservation_id = (_r ->> 'reservation_id')::uuid
-            and channel = 'whatsapp') = 0,
-    'No debería encolarse nada por WhatsApp sin su consentimiento';
+            and channel <> 'email') = 0,
+    'No debería encolarse nada por otro canal: el correo es el único';
 
   -- Y la respuesta lo dice, para que la interfaz pueda informarlo.
   assert (_r -> 'canales') = '["email"]'::jsonb,
     format('Canales informados: %s', _r -> 'canales');
 
-  raise notice 'OK · con sólo correo consentido, encola sólo correo';
+  raise notice 'OK · con el correo consentido, encola por correo';
 end;
 $$;
 
@@ -77,14 +77,13 @@ do $$
 declare
   _u uuid; _fac uuid; _bloque uuid; _r jsonb; _reserva uuid;
 begin
-  -- Ambos canales: dos trabajos por aviso, con claves distintas.
+  -- Un trabajo por aviso, con claves distintas entre sí.
   _u := test_helpers.create_user('correo3@uc.cl', 'Cata Correo');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56955556666', true);
   perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type)
-  values ('Recinto Dos Canales', 'Fútbol') returning id into _fac;
+  values ('Recinto Claves', 'Fútbol') returning id into _fac;
   insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
   values (_fac, now() + interval '8 hours', now() + interval '9 hours', 5)
   returning id into _bloque;
@@ -93,21 +92,22 @@ begin
   _reserva := (_r ->> 'reservation_id')::uuid;
 
   assert (select count(*) from public.notification_jobs
-          where reservation_id = _reserva and kind = 'confirmacion') = 2,
-    'La confirmación debería encolarse una vez por canal';
+          where reservation_id = _reserva and kind = 'confirmacion') = 1,
+    'La confirmación debería encolarse una sola vez';
   assert (select count(distinct idempotency_key) from public.notification_jobs
-          where reservation_id = _reserva) = 4,
-    'Las cuatro claves de idempotencia deben ser distintas entre sí';
+          where reservation_id = _reserva) = 2,
+    'Las dos claves de idempotencia deben ser distintas entre sí';
 
-  -- La clave de WhatsApp conserva el prefijo histórico, de modo que lo
-  -- encolado antes de la migración sigue siendo idempotente.
+  -- La clave conserva el prefijo 'em:' con que se encoló siempre, de
+  -- modo que lo encolado antes sigue siendo idempotente y un mismo
+  -- aviso no se duplica.
   assert exists (
     select 1 from public.notification_jobs
     where reservation_id = _reserva
-      and idempotency_key = 'wa:confirm:' || _reserva::text
-  ), 'La clave de WhatsApp cambió de forma';
+      and idempotency_key = 'em:confirm:' || _reserva::text
+  ), 'La clave de la confirmación cambió de forma';
 
-  raise notice 'OK · con ambos canales, dos trabajos por aviso';
+  raise notice 'OK · un trabajo por aviso, con claves estables';
 end;
 $$;
 
@@ -118,7 +118,7 @@ begin
   -- Revocar un canal no debe apagar el otro.
   _u := test_helpers.create_user('correo4@uc.cl', 'Dani Correo');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56977778888', true);
+  perform public.set_email_consent(true);
   perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type)
@@ -136,12 +136,11 @@ begin
           where reservation_id = _reserva and channel = 'email'
             and status = 'cancelado') = 2,
     'Al revocar el correo, lo encolado por correo debe descartarse';
-  assert (select count(*) from public.notification_jobs
-          where reservation_id = _reserva and channel = 'whatsapp'
-            and status = 'pendiente') = 2,
-    'Revocar el correo no debe tocar lo encolado por WhatsApp';
+  -- Y la reserva no se toca: el aviso es informativo.
+  assert (select status from public.reservations where id = _reserva) = 'vigente',
+    'Revocar el consentimiento no debe afectar a la reserva';
 
-  raise notice 'OK · revocar un canal no apaga el otro';
+  raise notice 'OK · revocar descarta lo encolado y no toca la reserva';
 end;
 $$;
 
@@ -172,22 +171,20 @@ begin
     format('Esperaba un trabajo de correo, vino %s', _trabajo.channel);
   assert _trabajo.to_email = 'correo5@uc.cl',
     format('El destino del correo no se resolvió: %s', _trabajo.to_email);
-  assert _trabajo.to_phone is null,
-    'Un trabajo de correo no debe traer teléfono';
 
   perform public.complete_notification_job(
     _trabajo.job_id, 'comms_operation_prueba_01', 'correo5@uc.cl');
 
   assert (select channel = 'email' and to_email = 'correo5@uc.cl' and to_phone is null
             and status = 'enviado'
-          from public.whatsapp_messages
+          from public.notification_messages
           where notification_job_id = _trabajo.job_id),
     'El envío no quedó registrado en el canal correcto';
 
   -- De la dirección sólo debe quedar el dominio en la bitácora, que es
   -- legible por los administradores de recinto.
   select details into _detalles from public.reservation_audit_log
-  where reservation_id = _reserva and action = 'whatsapp_enviado'
+  where reservation_id = _reserva and action = 'notificacion_enviada'
   order by created_at desc limit 1;
 
   assert _detalles ->> 'canal' = 'email',
@@ -195,7 +192,7 @@ begin
   assert _detalles ->> 'destino' = '@uc.cl',
     format('La bitácora no debe guardar la dirección completa: %s', _detalles);
 
-  raise notice 'OK · el reclamo y el registro distinguen el canal';
+  raise notice 'OK · el reclamo resuelve el destino y la bitácora lo enmascara';
 end;
 $$;
 
@@ -203,7 +200,7 @@ do $$
 declare
   _u uuid;
 begin
-  -- El canal sólo admite los dos valores conocidos.
+  -- El canal sólo admite 'email': es el único que existe.
   _u := test_helpers.create_user('correo6@uc.cl', 'Fran Correo');
 
   begin
@@ -215,9 +212,20 @@ begin
     null;
   end;
 
-  -- Y un registro no puede tener el destino del otro canal.
+  -- Y tampoco se admite ya el canal retirado, aunque las filas
+  -- históricas con ese valor se conserven (la restricción es NOT VALID).
   begin
-    insert into public.whatsapp_messages
+    insert into public.notification_jobs
+      (user_id, kind, channel, idempotency_key)
+    values (_u, 'confirmacion', 'whatsapp', 'wa:x:1');
+    assert false, 'El canal retirado no debería aceptarse en filas nuevas';
+  exception when check_violation then
+    null;
+  end;
+
+  -- Un registro no puede llevar un teléfono como destino.
+  begin
+    insert into public.notification_messages
       (user_id, kind, channel, to_phone)
     values (_u, 'confirmacion', 'email', '+56911112222');
     assert false, 'Un registro de correo no debería aceptar teléfono';

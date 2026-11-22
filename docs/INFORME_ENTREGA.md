@@ -23,7 +23,7 @@ Lo esencial de lo que cambió:
   `max_connections=200`; en un servidor con el valor por omisión la prueba usa
   las que caben y lo dice.
 - **Las integraciones son reales y viven en el backend.** OAuth 2.0 de Google
-  con `state` firmado y tokens cifrados con AES-256-GCM; Twilio invocado sólo
+  con `state` firmado y tokens cifrados con AES-256-GCM; el proveedor de correo invocado sólo
   desde una Edge Function, con webhook de estados autenticado por firma. Ningún
   secreto externo llega al navegador.
 - **Un fallo de integración nunca invalida una reserva.** Hay una prueba que
@@ -54,7 +54,7 @@ Resumen por bloque:
 | 6.2 Disponibilidad | REQ-8 a REQ-11 | 4 de 4 implementados |
 | 6.3 Reservas | REQ-12 a REQ-16 | 5 de 5 implementados |
 | 6.4 Google Calendar | REQ-17 a REQ-21 | 5 de 5 implementados |
-| 6.5 WhatsApp | REQ-22 a REQ-27 | 6 de 6 implementados |
+| 6.5 Notificaciones | REQ-22 a REQ-27 | 6 de 6 implementados, por correo |
 | 6.6 Administración | REQ-28 a REQ-33 | 6 de 6 implementados |
 | **Total** | **33** | **33 implementados** |
 
@@ -94,14 +94,13 @@ supabase/tests/50_integrations.sql
 **Edge Functions (18)**
 
 ```
-supabase/functions/_shared/{env,http,crypto,log,supabase,google,twilio,phone,messages,worker_auth,calendar_tokens}.ts
+supabase/functions/_shared/{env,http,crypto,log,supabase,google,brevoEmail,messages,worker_auth,calendar_tokens}.ts
 supabase/functions/google-oauth-start/index.ts
 supabase/functions/google-oauth-callback/index.ts
 supabase/functions/google-calendar-disconnect/index.ts
 supabase/functions/crear-administrador/index.ts
 supabase/functions/process-calendar-jobs/index.ts
 supabase/functions/process-notification-jobs/index.ts
-supabase/functions/twilio-status-webhook/index.ts
 supabase/functions/cron-dispatch/index.ts
 ```
 
@@ -125,7 +124,7 @@ src/pages/admin/{RecintosSeccion,BloquesSeccion,ReservasSeccion,IntegracionesSec
 src/domain/phone.test.ts
 src/lib/{errors,retry}.test.ts
 src/data/mockRepository.test.ts
-src/test/{oauthCrypto,googleCalendar,twilioWhatsapp}.test.ts
+src/test/{oauthCrypto,googleCalendar,brevoEmail}.test.ts
 vitest.config.ts
 ```
 
@@ -135,7 +134,7 @@ vitest.config.ts
 scripts/{db-harness,db-test,concurrency-test}.mjs
 scripts/{set-secrets,deploy-functions,deploy-frontend,seed-usuarios}.sh
 scripts/{db-connect-test,schedule-cron,supabase-cli,dev-wsl}.sh
-scripts/{diagnose-google,diagnose-twilio,configurar-publicacion}.sh
+scripts/{diagnose-google,configurar-publicacion}.sh
 scripts/lib/{node-env,db-url}.sh
 iniciar.cmd
 netlify.toml
@@ -147,17 +146,16 @@ package-lock.json
 
 Los de diagnóstico existen porque dos fallos de integración costaron horas de
 conjeturas: `diagnose-google.sh` distingue `invalid_grant` de `invalid_client`
-—es decir, credenciales buenas de credenciales mal copiadas— y
-`diagnose-twilio.sh` comprueba el plan de la cuenta y, sobre todo, cuál es el
-número del Sandbox que le toca, que no es el mismo en todas y cuyo error no lo
-menciona. `configurar-publicacion.sh` hace los ajustes de backend al publicar
+—es decir, credenciales buenas de credenciales mal copiadas— y, por el mismo
+motivo, el diagnóstico que existía para el canal de WhatsApp se fue con él.
+`configurar-publicacion.sh` hace los ajustes de backend al publicar
 el frontend e imprime los que viven en paneles ajenos.
 
 **Documentación (11)**
 
 ```
 docs/{REQUISITOS_IMPLEMENTADOS,CONFIGURACION_SUPABASE,CONFIGURACION_GOOGLE_CALENDAR}.md
-docs/{CONFIGURACION_TWILIO_WHATSAPP,DESPLIEGUE_AWS,OPERACION,PRUEBAS,SEGURIDAD}.md
+docs/{CONFIGURACION_CORREO,DESPLIEGUE_AWS,OPERACION,PRUEBAS,SEGURIDAD}.md
 docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 ```
 
@@ -174,11 +172,11 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 12 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba WhatsApp como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 13 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba el mensaje como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
-| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 17 documentos de `docs/` |
+| `docs/{guia-uso,despliegue-s3-cloudfront,pruebas-concurrencia}.md` | Reemplazados por los 16 documentos de `docs/` |
 | `yarn.lock` | Se unificó en npm (`package-lock.json`) para que CI sea reproducible |
 
 ---
@@ -198,11 +196,12 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261104000900_administrador_general.sql` | 583 | Rol `administrador_general` (REQ-29): amplía `is_admin` e `is_facility_admin`, abre la barrera anti-escalada sólo para la vía sancionada, y añade las funciones de asignar, retirar y listar administradores |
 | `20261104001000_aviso_cupo_liberado.sql` | 388 | Aviso de cupo liberado (SC-2): tabla `block_watchers`, tipo de notificación `cupo_liberado`, `block_id` en la cola, disparador por sentencia sobre las cancelaciones y reclamo que resuelve el horario desde el bloque |
 | `20261104001100_codigo_en_asignacion.sql` | 129 | Un campo `codigo` en cada respuesta de `admin_general_asignar_administrador`, para que la Edge Function `crear-administrador` distinga «ese correo no tiene cuenta» sin decidir por el texto del mensaje. No cambia ninguna regla |
-| `20261104001200_descartar_incidencias.sql` | 402 | Descartar una integración en error ya resuelta (REQ-33): marca `dismissed_at`/`dismissed_by` en `whatsapp_messages` y `calendar_sync_jobs`, función `admin_descartar_incidencia`, el informe deja de contarlas y la fila se conserva porque es la trazabilidad de REQ-27. Además, conceder el rol de administrador sin recintos se informa con propiedad |
+| `20261104001200_descartar_incidencias.sql` | 402 | Descartar una integración en error ya resuelta (REQ-33): marca `dismissed_at`/`dismissed_by` en la tabla de envíos y en `calendar_sync_jobs`, función `admin_descartar_incidencia`, el informe deja de contarlas y la fila se conserva porque es la trazabilidad de REQ-27. Además, conceder el rol de administrador sin recintos se informa con propiedad |
+| `20261121000100_retirar_whatsapp.sql` | 1175 | Retirada del canal de WhatsApp: `whatsapp_messages` pasa a `notification_messages` conservando su historial, el canal queda restringido a `email` con una restricción `NOT VALID` —una validada fallaría por las filas históricas—, se van el consentimiento de WhatsApp y las dos funciones del canal, y el teléfono pasa a actualizarse por privilegio de columna (REQ-7) |
 
 Las 14 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
-`calendar_connections`, `calendar_sync_jobs`, `whatsapp_messages`,
+`calendar_connections`, `calendar_sync_jobs`, `notification_messages`,
 `notification_jobs`, `webhook_events`, `oauth_states`,
 `rate_limit_counters` y `block_watchers`.
 
@@ -221,16 +220,15 @@ distintos por entorno y no deben versionarse.
 | `google-calendar-disconnect` | sí | Revoca en Google, borra los tokens y cancela los trabajos pendientes |
 | `crear-administrador` | sí | Crea la cuenta de un administrador de recintos y le asigna sus recintos (REQ-29). Comprueba el rol **contra la base** antes de usar la clave de servicio, crea la cuenta sin contraseña y avisa por correo. Límite de 10 por hora |
 | `process-calendar-jobs` | no | Crea y elimina eventos con reintentos. Renueva el access token solo |
-| `process-notification-jobs` | no | Envía por WhatsApp o por correo, segun el canal del trabajo, validando el consentimiento de ese canal y el formato del destino |
-| `twilio-status-webhook` | no | Actualiza los estados de entrega. Valida firma; idempotente |
+| `process-notification-jobs` | no | Envía el correo por la API de Brevo, validando el consentimiento vigente y la dirección antes de enviar |
 | `cron-dispatch` | no | Punto único de entrada a los workers: lo invoca un disparador en cuanto se encola un trabajo, y `pg_cron` cada minuto como red de seguridad |
 
 Las que no verifican JWT se autentican por su cuenta: `state` firmado, firma de
-Twilio o `x-cron-secret`, siempre con comparación en tiempo constante. Si
+o `x-cron-secret`, siempre con comparación en tiempo constante. Si
 `CRON_SECRET` no está configurado, los workers rechazan todo.
 
 Módulos compartidos en `_shared/`: cifrado AES-256-GCM y firma HMAC, clientes de
-Google, de la API de Mensajes de Twilio y de su API de Correo, validación E.164,
+Google y de la API de Brevo,
 plantillas en español con el orden de variables configurable, CORS por lista
 blanca y registro con redacción obligatoria.
 
@@ -258,15 +256,12 @@ blanca y registro con redacción obligatoria.
 | `GOOGLE_CLIENT_ID` | **sí** | |
 | `GOOGLE_CLIENT_SECRET` | **sí** | |
 | `GOOGLE_REDIRECT_URI` | **sí** | Debe coincidir exactamente con Google |
-| `TWILIO_ACCOUNT_SID` | **sí** | |
-| `TWILIO_AUTH_TOKEN` | **sí** | También valida la firma del webhook |
-| `TWILIO_WHATSAPP_FROM` | **sí** | E.164 |
-| `APP_URL` | **sí** | Destino del callback de OAuth |
+| `BREVO_API_KEY` | **sí** | La API key (`xkeysib-…`), no la SMTP key |
+| `BREVO_EMAIL_FROM` | **sí** | Remitente verificado en Brevo |
+| `APP_URL` | **sí** | Destino del callback de OAuth y del enlace del correo |
 | `APP_ALLOWED_ORIGINS` | no | Lista blanca de CORS |
 | `APP_TIME_ZONE` | no | |
-| `TWILIO_STATUS_CALLBACK_URL` | recomendada | Sin ella no hay trazabilidad de entrega |
-| `TWILIO_WEBHOOK_URL` | no | Sólo si un proxy altera el host |
-| `TWILIO_CONTENT_SID_*` (3) | **sí en producción** | Plantillas aprobadas por Meta |
+| `BREVO_EMAIL_FROM_NAME` | no | Nombre visible del remitente |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` las inyecta
 Supabase: cargarlas como secretos falla.
@@ -332,14 +327,13 @@ TypeScript), `supabase/functions/**` (Deno) y `scripts/**` (Node).
 
 ```
 Test Files  8 passed (8)
-     Tests  276 passed (276)
+     Tests  235 passed (235)
 ```
 
 | Archivo | Pruebas |
 |---|---|
 | `src/data/mockRepository.test.ts` | 61 |
 | `src/domain/reservationRules.test.ts` | 34 |
-| `src/test/twilioWhatsapp.test.ts` | 40 |
 | `src/test/oauthCrypto.test.ts` | 24 |
 | `src/test/googleCalendar.test.ts` | 23 |
 | `src/lib/errors.test.ts` | 21 |
@@ -393,7 +387,7 @@ fijados como lo hace PostgREST, y todas se liberan desde una barrera común.
 
 | Trabajo | Qué corre |
 |---|---|
-| `cliente` | `lint`, `typecheck`, 276 pruebas de Vitest y `build` |
+| `cliente` | `lint`, `typecheck`, 235 pruebas de Vitest y `build` |
 | `base` | las 10 suites SQL y la concurrencia contra un PostgreSQL 16 real |
 
 Con esto queda cubierto el requisito de § 10 del documento de
@@ -450,35 +444,30 @@ local y no se suben.
    cancelar, medidos en ~2 s y ~3 s respectivamente contra un proyecto de
    Supabase real.
 
-2. **Twilio: ejercido de punta a punta contra la API real** (16/10/2026).
-   Reserva → cola → despacho inmediato → `process-notification-jobs` → Twilio →
-   entrega en el teléfono → webhook de estados: el mensaje salió en 2 s y los
-   tres eventos (`sent`, `read`, `delivered`) llegaron firmados y quedaron en
-   `webhook_events`, con `whatsapp_messages` en `entregado`. Una firma
-   falsificada sigue recibiendo `403`.
+2. **Correo: ejercido de punta a punta contra la API real.** Reserva → cola →
+   despacho inmediato → `process-notification-jobs` → Brevo → bandeja. Medido
+   sobre los envíos reales del proyecto: entre 1,1 y 2,9 segundos desde el
+   evento hasta que el proveedor acepta, con el texto propio de ActivaUC.
 
-   Dos salvedades sobre **WhatsApp**. El texto enviado es el de una plantilla
-   de muestra de Twilio, porque en cuenta Trial `ContentSid` es obligatorio y
-   no se permite escribir el mensaje propio; los textos de § 4.1–4.3 requieren
-   salir de Trial. Y sólo llega a quien haya hecho el `join` del Sandbox en las
-   últimas 24 h: pasado eso, Twilio responde `63016`.
+   Hubo antes un canal de **WhatsApp** por Twilio, ejercido también de punta a
+   punta el 16/10/2026 —mensaje entregado en 2 s, los tres eventos del webhook
+   firmados y el mensaje en `entregado`—. Ese canal **se retiró del producto**:
+   en cuenta Trial el texto no podía ser el propio (`ContentSid` obligatorio) y
+   sólo llegaba a quien hubiera hecho el `join` del Sandbox en las últimas 24
+   horas (`63016`). El historial de esos envíos se conserva en
+   `notification_messages`.
 
-   El **canal de correo**, en cambio, quedó cerrado el 17/10/2026 al migrarlo
-   de Twilio a la API de Brevo. El de Twilio tenía dos restricciones que lo
-   hacían inservible con terceros —contenido limitado a plantillas de muestra y
-   entrega sólo a destinatarios verificados, error `574002`— y Brevo no tiene
-   ninguna en su plan gratuito. Verificado: aviso de reserva con el texto propio
-   de ActivaUC, enviado en 2 s a una dirección que antes fallaba. La elección es
-   por configuración, `BREVO_API_KEY` presente o no, así que el emisor de Twilio
-   se conserva como respaldo.
+   Lo que el correo **no** informa es la entrega: la API de Brevo acepta el
+   envío y no devuelve estados, así que un envío correcto termina en `enviado`.
 
-   La **cancelación administrativa** no se ha ejercido contra ningún proveedor:
-   lo verificado de ese tipo de mensaje sigue siendo sólo `50_integrations.sql`.
+   La **cancelación administrativa** no se ha ejercido contra el proveedor: lo
+   verificado de ese tipo de mensaje sigue siendo sólo `50_integrations.sql`.
 
-3. **Las plantillas de WhatsApp requieren aprobación de Meta**, que es un
-   trámite externo de duración variable, y crearlas requiere además salir de
-   Trial. La idea de que «sin plantillas los envíos funcionan en el Sandbox»
-   no se sostiene: ver el punto 2.
+3. **El retraso de los correos no está en este código.** El sistema entrega al
+   proveedor en 1 a 3 segundos; los minutos que pueden pasar hasta la bandeja
+   vienen de un remitente que no pasa la alineación DMARC. Se arregla con un
+   dominio propio verificado en Brevo, no con código: ver
+   `CONFIGURACION_CORREO.md` § 7.
 
 4. **La verificación de Google puede tardar** si la pantalla de consentimiento
    se publica como «Externa», porque `calendar.events` es un permiso sensible.
@@ -546,7 +535,7 @@ requisito.
 |---|---|---|
 | 1 | Crear el proyecto de Supabase y anotar su referencia | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 3 |
 | 2 | Crear el proyecto de Google Cloud, habilitar Calendar API y el cliente OAuth | [CONFIGURACION_GOOGLE_CALENDAR.md](CONFIGURACION_GOOGLE_CALENDAR.md) § 1–4 |
-| 3 | Crear la cuenta de Twilio y el Sandbox. Para probar el encadenamiento basta un `ContentSid` de los que Twilio provee en la consola; para los textos propios de ActivaUC hay que **salir de Trial** y crear las 3 plantillas, porque en Trial el texto libre se rechaza con `21654` y el Content API con `20003` | [CONFIGURACION_TWILIO_WHATSAPP.md](CONFIGURACION_TWILIO_WHATSAPP.md) § 1–4 |
+| 3 | Crear la cuenta de Brevo, verificar el remitente y generar la **API key** (no la SMTP key) | [CONFIGURACION_CORREO.md](CONFIGURACION_CORREO.md) § 6.1 |
 | 4 | Publicar el frontend. Para una entrega basta un alojamiento estático (Netlify, Vercel, Cloudflare Pages), y `netlify.toml` y `public/_redirects` ya traen la reescritura que un enrutado de una sola página necesita; para infraestructura propia, S3 y CloudFront | [COMPARTIR.md](COMPARTIR.md) § 2 o [DESPLIEGUE_AWS.md](DESPLIEGUE_AWS.md) § 2–4 |
 | 5 | Generar `ENCRYPTION_KEY` y `CRON_SECRET` y cargar los secretos | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 6 |
 | 6 | Configurar las Redirect URLs de Auth (`/auth/callback`, `/restablecer-contrasena`, `/verificar`) | [CONFIGURACION_SUPABASE.md](CONFIGURACION_SUPABASE.md) § 4 |
@@ -578,7 +567,7 @@ npx supabase db push                  # aplicar
 cp .env.secrets.example .env.secrets
 openssl rand -base64 32               # → ENCRYPTION_KEY
 openssl rand -hex 32                  # → CRON_SECRET
-#   completar .env.secrets con las credenciales de Google y Twilio
+#   completar .env.secrets con las credenciales de Google y Brevo
 
 bash scripts/set-secrets.sh --verificar   # valida sin subir
 bash scripts/set-secrets.sh
@@ -623,7 +612,7 @@ bash scripts/seed-usuarios.sh --listar
 
 # ── 7. Verificación ─────────────────────────────────────────────────
 #   CONFIGURACION_SUPABASE.md § 9, DESPLIEGUE_AWS.md § 7,
-#   CONFIGURACION_GOOGLE_CALENDAR.md § 6, CONFIGURACION_TWILIO_WHATSAPP.md § 7
+#   CONFIGURACION_GOOGLE_CALENDAR.md § 6, CONFIGURACION_CORREO.md § 6.1
 ```
 
 ---
@@ -645,7 +634,7 @@ grep -rhoE "eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}" \
 
 # Secretos de backend en el frontend
 grep -rn "Deno\.env" src/                           # → sin resultados
-grep -rniE "googleapis\.com|api\.twilio\.com" src/   # → sólo en src/test/
+grep -rniE "googleapis\.com|api\.brevo\.com" src/   # → sólo en src/test/
 
 # Archivos .env rastreados por Git
 git ls-files | grep -E "\.env"
@@ -695,11 +684,11 @@ linter, no una inspección a ojo.
 | 2 | Funciones de `public` ejecutables por `anon` | `REVOKE ... FROM anon` no surte efecto, porque `anon` hereda de `PUBLIC` | `10_schema.sql` |
 | 3 | ESLint no revisaba ningún archivo | Todo el código quedaba sin análisis estático, incumpliendo el requisito de linter | Ejecutar `npm run lint` |
 | 4 | `setState` sincrónico dentro de un efecto | Renders en cascada | ESLint corregido |
-| 5 | `CASE` sin tipo en `fail_notification_job` | **Registrar cualquier fallo de WhatsApp habría fallado en ejecución** | `50_integrations.sql` |
+| 5 | `CASE` sin tipo en `fail_notification_job` | **Registrar cualquier fallo de envío habría fallado en ejecución** | `50_integrations.sql` |
 | 6 | `ORDER BY` tras `UNION ALL` en `admin_integration_report` | El informe de integraciones del panel habría fallado siempre | `50_integrations.sql` |
 | 7 | Escáner de secretos con falsos positivos | Habría abortado cada despliegue, enseñando a ignorar la alerta | Prueba del escáner |
 | 8 | Scripts con fin de línea CRLF | `$'\r': command not found`: el despliegue no habría funcionado en Linux ni en CI | Ejecutarlos en WSL |
 | 9 | `.gitignore` sin `.env` | Riesgo de versionar credenciales | Revisión de seguridad |
-| 10 | Estado «enviado» de WhatsApp fijado sin enviar nada | La interfaz habría afirmado que un mensaje salió cuando no existía ningún envío | Revisión de la migración original |
+| 10 | Estado «enviado» fijado sin enviar nada | La interfaz habría afirmado que un mensaje salió cuando no existía ningún envío | Revisión de la migración original |
 | 11 | Pruebas que creaban un bloque a una hora fija | Pasaban por la tarde y fallaban de madrugada, según si la hora caía sobre un bloque de la semilla. Lo encontró la primera ejecución real de la verificación automática | Ahora buscan el primer hueco libre |
 | 12 | Consulta del estado de Google Calendar sin límite de tiempo | Al volver del consentimiento la consulta se quedaba colgada sin lanzar nada y la insignia se quedaba en «Consultando…» hasta recargar. Una promesa que no vuelve no se captura con `try/catch` | `limiteDeTiempo.test.ts` |

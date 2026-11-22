@@ -236,7 +236,7 @@ El script:
 3. Ejecuta lint, typecheck y las pruebas antes de compilar.
 4. Compila a `dist/`.
 5. **Revisa el paquete generado** buscando referencias a secretos de backend
-   (`service_role`, `GOOGLE_CLIENT_SECRET`, `TWILIO_AUTH_TOKEN`,
+   (`service_role`, `GOOGLE_CLIENT_SECRET`, `BREVO_API_KEY`,
    `ENCRYPTION_KEY`, `CRON_SECRET`) y aborta si encuentra alguna.
 6. Sube en dos pasadas, por las cabeceras de caché.
 7. Invalida sólo `/index.html`.
@@ -288,7 +288,7 @@ Después, en el navegador:
 - Recarga en `/mis-reservas`: debe funcionar (SPA fallback).
 - Abre el catálogo en dos pestañas, reserva en una: la otra debe actualizar los
   cupos sin recargar (Realtime).
-- Revisa en la pestaña de red que no haya ninguna petición a Google ni a Twilio
+- Revisa en la pestaña de red que no haya ninguna petición a Google ni a Brevo
   desde el navegador: esas integraciones viven en el backend.
 
 ---

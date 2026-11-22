@@ -69,8 +69,6 @@ interface CuentaDemo {
   rol: Rol;
   confirmado: boolean;
   telefono: string | null;
-  whatsappConsentido: boolean;
-  whatsappConsentidoEn: string | null;
   correoConsentido: boolean;
   correoConsentidoEn: string | null;
 }
@@ -217,8 +215,6 @@ export class MockRepository implements ActivaRepository {
       // porque no hay servicio de correo.
       confirmado: true,
       telefono: null,
-      whatsappConsentido: false,
-      whatsappConsentidoEn: null,
       correoConsentido: false,
       correoConsentidoEn: null,
     });
@@ -476,8 +472,6 @@ export class MockRepository implements ActivaRepository {
       rol: "usuario",
       confirmado: true,
       telefono: null,
-      whatsappConsentido: false,
-      whatsappConsentidoEn: null,
       correoConsentido: false,
       correoConsentidoEn: null,
     });
@@ -517,6 +511,25 @@ export class MockRepository implements ActivaRepository {
     const cuenta = this.cuentaActual();
     cuenta.correoConsentido = consentido;
     cuenta.correoConsentidoEn = consentido ? new Date().toISOString() : null;
+
+    // Igual que en el backend: revocar descarta lo que estaba en cola,
+    // en lugar de dejar que el worker lo rechace uno por uno.
+    if (!consentido) {
+      for (const reserva of this.estado.reservas) {
+        if (reserva.usuarioId !== cuenta.id) continue;
+        if (reserva.notificacionConfirmacion === "pendiente") {
+          reserva.notificacionConfirmacion = "omitido";
+        }
+        if (reserva.notificacionRecordatorio === "pendiente") {
+          reserva.notificacionRecordatorio = "omitido";
+        }
+      }
+    }
+
+    this.auditar({
+      accion: consentido ? "consentimiento_otorgado" : "consentimiento_revocado",
+      actorRol: cuenta.rol,
+    });
     this.guardar();
     return {
       ok: true,
@@ -570,8 +583,6 @@ export class MockRepository implements ActivaRepository {
       nombre: cuenta.nombre,
       correo: cuenta.correo,
       telefono: cuenta.telefono,
-      whatsappConsentido: cuenta.whatsappConsentido,
-      whatsappConsentidoEn: cuenta.whatsappConsentidoEn,
       correoConsentido: cuenta.correoConsentido,
       correoConsentidoEn: cuenta.correoConsentidoEn,
       rol: cuenta.rol,
@@ -587,48 +598,33 @@ export class MockRepository implements ActivaRepository {
     this.guardar();
   }
 
-  async definirConsentimientoWhatsapp(
+  /**
+   * REQ-7 · el teléfono es un dato de contacto del perfil y nada más:
+   * guardarlo no activa ningún envío, porque los avisos van por correo
+   * y los decide `definirConsentimientoCorreo`.
+   */
+  async actualizarTelefono(
     telefono: string | null,
-    consentido: boolean,
   ): Promise<{ ok: boolean; mensaje: string }> {
     const cuenta = this.cuentaActual();
 
-    if (consentido) {
-      const limpio = normalizarTelefono(telefono ?? "");
-      if (!esE164(limpio)) {
-        return {
-          ok: false,
-          mensaje: "Ingresa el número en formato internacional E.164, por ejemplo +56912345678.",
-        };
-      }
-      cuenta.telefono = limpio;
-      cuenta.whatsappConsentido = true;
-      cuenta.whatsappConsentidoEn = cuenta.whatsappConsentidoEn ?? new Date().toISOString();
-      this.auditar({ accion: "consentimiento_otorgado", actorRol: cuenta.rol });
+    if (telefono === null || telefono.trim() === "") {
+      cuenta.telefono = null;
       this.guardar();
+      return { ok: true, mensaje: "Borramos tu teléfono." };
+    }
+
+    const limpio = normalizarTelefono(telefono);
+    if (!esE164(limpio)) {
       return {
-        ok: true,
-        mensaje: "Registramos tu número (simulado en modo demostración).",
+        ok: false,
+        mensaje: "Ingresa el número en formato internacional E.164, por ejemplo +56912345678.",
       };
     }
 
-    cuenta.telefono = null;
-    cuenta.whatsappConsentido = false;
-    cuenta.whatsappConsentidoEn = null;
-
-    // Igual que en el backend: revocar cancela los envíos pendientes.
-    for (const reserva of this.estado.reservas) {
-      if (reserva.usuarioId !== cuenta.id) continue;
-      if (reserva.whatsappConfirmacion === "pendiente") reserva.whatsappConfirmacion = "omitido";
-      if (reserva.whatsappRecordatorio === "pendiente") reserva.whatsappRecordatorio = "omitido";
-    }
-
-    this.auditar({ accion: "consentimiento_revocado", actorRol: cuenta.rol });
+    cuenta.telefono = limpio;
     this.guardar();
-    return {
-      ok: true,
-      mensaje: "Eliminamos tu número y revocamos el consentimiento.",
-    };
+    return { ok: true, mensaje: "Guardamos tu teléfono." };
   }
 
   // =================================================================
@@ -793,11 +789,11 @@ export class MockRepository implements ActivaRepository {
     }
 
     const conCalendario = this.estado.conexionCalendario[cuenta.id]?.estado === "conectado";
-    const conWhatsapp = cuenta.whatsappConsentido && cuenta.telefono !== null;
-    const habraRecordatorio = conWhatsapp && tendraRecordatorio(bloque.inicio);
+    const conAvisos = cuenta.correoConsentido;
+    const habraRecordatorio = conAvisos && tendraRecordatorio(bloque.inicio);
 
     const calendarSync: EstadoSincronizacion = conCalendario ? "pendiente" : "no_aplica";
-    const confirmacion: EstadoMensaje = conWhatsapp ? "pendiente" : "omitido";
+    const confirmacion: EstadoMensaje = conAvisos ? "pendiente" : "omitido";
     const recordatorio: EstadoMensaje = habraRecordatorio ? "pendiente" : "omitido";
 
     const reserva: Reserva = {
@@ -813,8 +809,8 @@ export class MockRepository implements ActivaRepository {
       esPasada: false,
       calendarSync,
       tieneEventoCalendario: false,
-      whatsappConfirmacion: confirmacion,
-      whatsappRecordatorio: recordatorio,
+      notificacionConfirmacion: confirmacion,
+      notificacionRecordatorio: recordatorio,
       canceladaEn: null,
       canceladaPorRol: null,
       motivoCancelacion: null,
@@ -837,8 +833,8 @@ export class MockRepository implements ActivaRepository {
       reservaId: reserva.id,
       mensaje: "Reserva confirmada.",
       calendarSync,
-      whatsappConfirmacion: confirmacion,
-      whatsappRecordatorio: habraRecordatorio ? "programado" : "omitido",
+      notificacionConfirmacion: confirmacion,
+      notificacionRecordatorio: habraRecordatorio ? "programado" : "omitido",
       cuposDisponibles: bloque.capacidadMaxima - vigentes - 1,
     };
   }
@@ -899,10 +895,10 @@ export class MockRepository implements ActivaRepository {
     reserva.canceladaPorRol = comoAdmin ? "administrador" : "usuario";
     reserva.motivoCancelacion = motivo?.trim() || null;
     reserva.calendarSync = reserva.tieneEventoCalendario ? "pendiente" : "no_aplica";
-    reserva.whatsappRecordatorio = "omitido";
+    reserva.notificacionRecordatorio = "omitido";
 
     const dueno = this.estado.cuentas.find((c) => c.id === reserva.usuarioId);
-    const notificar = comoAdmin && dueno?.whatsappConsentido === true && dueno.telefono !== null;
+    const notificar = comoAdmin && dueno?.correoConsentido === true;
 
     this.auditar({
       reservaId: reserva.id,
@@ -917,7 +913,7 @@ export class MockRepository implements ActivaRepository {
       ok: true,
       mensaje: "Reserva cancelada. El cupo quedó disponible para otras personas.",
       canceladoPor: comoAdmin ? "administrador" : "usuario",
-      notificacionWhatsapp: notificar,
+      notificacionEncolada: notificar,
     };
   }
 
@@ -1339,7 +1335,7 @@ export class MockRepository implements ActivaRepository {
         usuarioNombre: nombres.get(r.usuarioId) ?? "Usuario",
         calendarSync: r.calendarSync,
         tieneEventoCalendario: r.tieneEventoCalendario,
-        whatsappEstado: r.whatsappConfirmacion,
+        notificacionEstado: r.notificacionConfirmacion,
         canceladaPorRol: r.canceladaPorRol,
         motivoCancelacion: r.motivoCancelacion,
         creadaEn: r.creadaEn,
@@ -1363,7 +1359,7 @@ export class MockRepository implements ActivaRepository {
     if (!esAdministrador(cuenta.rol)) {
       throw new AppError("permisos", "Acceso restringido a administradores.");
     }
-    if (tipo !== "whatsapp" && tipo !== "google_calendar") {
+    if (tipo !== "notificacion" && tipo !== "google_calendar") {
       return { ok: false, mensaje: "Tipo de incidencia desconocido." };
     }
     // Sin colas reales no hay nada que descartar, y decir que se

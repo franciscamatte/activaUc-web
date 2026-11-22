@@ -67,7 +67,7 @@ ti»**.
 
 Un bloque sin cupos muestra ese botón. Al pulsarlo quedas anotado, y si
 alguien cancela te llegará un aviso por las vías que tengas activadas en
-«Datos personales» —WhatsApp, correo o ambas—.
+«Datos personales».
 
 Dos cosas importantes:
 
@@ -86,7 +86,7 @@ restantes. Antes de confirmar te recordamos:
 
 - Hasta cuándo puedes cancelar (2 horas antes del inicio).
 - Si se creará el evento en tu Google Calendar.
-- Si recibirás confirmación y recordatorio por WhatsApp.
+- Si recibirás confirmación y recordatorio por correo.
 
 Pulsa **Confirmar reserva**.
 
@@ -118,9 +118,9 @@ En cada reserva verás:
 | **Calendar: Pendiente** | Lo estamos creando; se actualiza solo |
 | **Calendar: Con error** | No pudimos sincronizarlo. **Tu reserva sigue siendo válida** |
 | **Calendar: No aplica** | No tienes Google Calendar conectado |
-| **Confirmación: Entregado** | El WhatsApp llegó |
+| **Confirmación: Entregado** | El correo llegó |
 | **Confirmación: En cola de envío** | Está por salir |
-| **Confirmación: Omitido** | No tienes WhatsApp habilitado |
+| **Confirmación: Omitido** | No tienes los avisos activados |
 
 ---
 
@@ -152,7 +152,7 @@ use la plataforma, ni el personal de los recintos, puede consultarlos.
 Puedes cambiarlo cuando quieras. El correo de tu cuenta no se modifica desde
 aquí: escribe a Deportes UC si lo necesitas.
 
-### Notificaciones por WhatsApp
+### Notificaciones por correo
 
 Si registras tu número, recibirás:
 
@@ -220,9 +220,9 @@ permanecen en tu calendario.
 4. Un bloque **no puede superar su capacidad máxima**. Cuando se llena, deja de
    admitir reservas.
 5. La administración del recinto puede cancelar reservas (por mantención, por
-   ejemplo) **sin** esa restricción de tiempo, y te avisará por WhatsApp si
+   ejemplo) **sin** esa restricción de tiempo, y te avisará por correo si
    tienes el número registrado.
-6. Las notificaciones por WhatsApp requieren tu **consentimiento explícito** y
+6. Las notificaciones por correo requieren tu **consentimiento explícito** y
    un número válido. Puedes revocarlo cuando quieras.
 7. La conexión con Google Calendar es **voluntaria** y desconectarla **no
    afecta** tus reservas.

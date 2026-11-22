@@ -72,13 +72,14 @@ administrador. Es lo que permite reconstruir qué ocurrió.
 |---|---|
 | `calendar_connections` | El token de Google de cada persona, **cifrado** |
 | `calendar_sync_jobs` | Cola: eventos de calendario por crear o borrar |
-| `notification_jobs` | Cola: avisos por enviar, con su canal (WhatsApp o correo) |
-| `whatsapp_messages` | Qué se envió, por dónde, y qué respondió el proveedor |
+| `notification_jobs` | Cola: avisos por enviar |
+| `notification_messages` | Qué se envió, a dónde, y qué respondió el proveedor |
 | `webhook_events` | Lo que los proveedores nos informaron, para no procesarlo dos veces |
 | `oauth_states` | Los `state` de OAuth en curso, de un solo uso |
 
-> `whatsapp_messages` registra los dos canales, correo incluido. El
-> nombre es histórico: nació cuando sólo existía WhatsApp.
+> `notification_messages` conserva también las filas del canal de
+> WhatsApp, retirado del producto: el registro de un envío no se borra
+> porque el canal deje de usarse.
 
 ### Defensa
 
@@ -106,7 +107,7 @@ Casi todo cuelga de tres tablas: `profiles`, `facilities` y
 facilities ──< time_blocks ──< reservations >── profiles
     │                              │               │
     │                              ├──< calendar_sync_jobs
-    │                              ├──< notification_jobs ──< whatsapp_messages
+    │                              ├──< notification_jobs ──< notification_messages
     │                              └──< reservation_audit_log
     └──< facility_admin_assignments >── profiles
                                         └──< calendar_connections
@@ -190,7 +191,7 @@ Todo esto se prueba con los roles reales de Supabase, no simulados, en
 
 ## 6. Por qué los avisos pasan por una cola
 
-Cuando reservas, el correo o el WhatsApp **no se envía en ese momento**.
+Cuando reservas, el correo **no se envía en ese momento**.
 Se encola en `notification_jobs` y un proceso aparte lo manda.
 
 El motivo: si el envío fuera parte de la transacción de la reserva, un

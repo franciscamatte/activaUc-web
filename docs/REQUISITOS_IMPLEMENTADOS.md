@@ -24,7 +24,7 @@ respaldo no cuenta.
 | REQ-4 | Diferenciación entre administrador y usuario | Implementado | `ProtectedRoute` en la interfaz; `is_admin()` e `is_facility_admin()` en RLS y en cada función de administración | `40_rls.sql` › «administrador acotado a sus recintos asignados» |
 | REQ-5 | Manejo de errores de autenticación con la razón | Implementado | `src/lib/errors.ts` traduce cada error de Supabase a un mensaje en español específico (credenciales, correo sin confirmar, correo en uso, contraseña débil) | `errors.test.ts` (21 casos, incluye «ningún mensaje contiene texto en inglés») |
 | REQ-6 | Recuperación de contraseña por correo | Implementado | `RecuperarPasswordPage` → `resetPasswordForEmail`; `VerificarCodigoPage` → `verifyOtp('recovery')`; `RestablecerPasswordPage` → `updateUser`. Respuesta idéntica exista o no la cuenta, para no revelar correos registrados. **Código de 6 dígitos y no enlace**: contra el proyecto real se comprobó que un enlace enviado a una dirección `@uc.cl` quedó consumido veinte segundos después, sin que nadie iniciara sesión —lo abrió el escáner de enlaces de Microsoft 365— y al ser de un solo uso el escáner la dejó confirmada sin que nadie demostrara controlar ese buzón; en la recuperación de contraseña el mismo efecto sí deja a la persona fuera, porque gasta el token sin definir contraseña nueva. Un código no se gasta por visitarlo. Las plantillas sin enlace están en `supabase/templates/` | `mockRepository.test.ts` › «un código de 6 dígitos confirma la cuenta», «rechaza un código mal formado», «no revela si el correo existe»; evidencia del diagnóstico en `docs/CONFIGURACION_CORREO.md` § 1 |
-| REQ-7 | Ver y actualizar datos personales | Implementado | `src/pages/DatosPersonalesPage.tsx`. El nombre se actualiza con privilegio de columna `update (full_name)`; el teléfono pasa por `set_whatsapp_consent()` | `40_rls.sql` › «puede actualizar su propio nombre», `mockRepository.test.ts` › «actualiza el nombre» |
+| REQ-7 | Ver y actualizar datos personales | Implementado | `src/pages/DatosPersonalesPage.tsx`. El nombre y el teléfono se actualizan con privilegio de columna (`update (full_name)` y `update (phone)`) sobre la propia fila, con la misma política RLS; el formato E.164 lo exige `profiles_phone_check` | `40_rls.sql` › «puede actualizar su propio nombre», `mockRepository.test.ts` › «actualiza el nombre» |
 
 ---
 
@@ -89,16 +89,25 @@ solicitud (igual que PostgREST en Supabase):
 
 ---
 
-## 6.5 Notificaciones y recordatorios por WhatsApp
+## 6.5 Notificaciones y recordatorios
+
+> **El canal cambió.** El documento de requerimientos dice «vía
+> WhatsApp». El equipo retiró ese canal y las notificaciones salen por
+> **correo**, con el acuerdo de la ayudante del curso. Lo que cada
+> requisito pide —consentimiento explícito, revocación que detiene los
+> envíos, confirmación, recordatorio a 2 h, aviso de cancelación y
+> trazabilidad de cada mensaje— se cumple igual; lo que cambia es la vía.
+> El historial de los envíos que sí salieron por WhatsApp se conserva en
+> `notification_messages`.
 
 | Req | Descripción | Estado | Dónde está | Verificación |
 |---|---|---|---|---|
-| REQ-22 | Registrar teléfono con consentimiento explícito | Implementado | `set_whatsapp_consent()`. Restricciones en la tabla: formato E.164 y `whatsapp_consent = false OR phone IS NOT NULL`. Desde la migración 08 hay un segundo canal, el correo, con `set_email_consent()` y su propio consentimiento: la persona elige WhatsApp, correo, ambos o ninguno. La dirección no se duplica en `profiles`, se lee de `auth.users` | `10_schema.sql` › «restricciones de datos personales»; `80_canal_correo.sql` (6 escenarios); `phone.test.ts` (20 casos) |
-| REQ-23 | Revocar el consentimiento o eliminar el teléfono, deteniendo los envíos | Implementado | La misma función borra el teléfono, apaga el consentimiento y **cancela los trabajos pendientes**. El worker tampoco reclama trabajos de usuarios sin consentimiento vigente | `50_integrations.sql` › «revocación de consentimiento y validación E.164» |
-| REQ-24 | Confirmación al crear la reserva | Implementado | Trabajo `confirmacion` encolado para ejecución inmediata, uno por cada canal consentido (`private.encolar_notificacion`); `process-notification-jobs` lo envía por la API de Mensajes o la de Correo de Twilio según el canal. Ejercido contra la cuenta real: WhatsApp en 2 s (16/10) y correo en 2 s (17/10). El correo sale por la API de Brevo, no por Twilio, porque el plan de prueba de éste limita el contenido a plantillas de muestra y sólo entrega a destinatarios verificados (574002); con Brevo llega a cualquier dirección con el texto propio de ActivaUC. Se elige por configuración: `BREVO_API_KEY` presente o no | `50_integrations.sql` › «cola de WhatsApp, trazabilidad e idempotencia»; `80_canal_correo.sql` |
+| REQ-22 | Registrar el consentimiento explícito de las notificaciones | Implementado | `set_email_consent()`, con `email_consent` y `email_consent_at` en `profiles` y la restricción `email_consent = false OR email_consent_at IS NOT NULL`. **No pide la dirección**: es la de la cuenta con que la persona entró, ya verificada en `auth.users`; aceptar una cualquiera convertiría esto en un medio para enviar correo a terceros. El teléfono sigue existiendo como dato de contacto (REQ-7), pero ya no activa ningún envío | `10_schema.sql` › «restricciones de datos personales»; `80_canal_correo.sql` (6 escenarios) |
+| REQ-23 | Revocar el consentimiento, deteniendo los envíos | Implementado | La misma función apaga el consentimiento y **cancela los trabajos pendientes**, en lugar de dejar que el worker los rechace uno por uno. El worker tampoco reclama trabajos de quien no tenga consentimiento vigente **en el momento del reclamo** | `50_integrations.sql` › «revocación y reactivación del consentimiento de correo»; `80_canal_correo.sql` |
+| REQ-24 | Confirmación al crear la reserva | Implementado | Trabajo `confirmacion` encolado para ejecución inmediata (`private.encolar_notificacion`) y despachado por un disparador, sin esperar al cron; `process-notification-jobs` lo envía por la API HTTP de Brevo. Medido sobre los envíos reales del proyecto: entre 1,1 y 2,9 s desde el evento hasta que el proveedor acepta | `50_integrations.sql` › «cola de notificaciones y trazabilidad del envío»; `80_canal_correo.sql`; `brevoEmail.test.ts` (10 casos) |
 | REQ-25 | Recordatorio 2 h antes; si la reserva se crea con menos de 2 h, sólo confirmación | Implementado | `scheduled_for = starts_at - 2 horas`; si ese instante ya pasó, **no se encola nada** | `20_reservations.sql` › «regla exacta del recordatorio de 2 horas» (ambos lados del límite); `reservationRules.test.ts` › `tendraRecordatorio` |
-| REQ-26 | Notificar al usuario cuando el administrador cancela | Implementado | `cancel_reservation` encola `cancelacion_admin` con el motivo, una vez por cada canal consentido | `30_cancellations.sql` › «cancelación administrativa y aviso por WhatsApp». **No ejercido contra la API real**: de este tipo de mensaje sólo está verificada la lógica de cola |
-| REQ-27 | Registrar el estado de cada mensaje para trazabilidad | Implementado | Tabla `whatsapp_messages` (`pendiente`, `enviado`, `entregado`, `fallido`, `omitido`), con `channel` para distinguir las dos vías, + webhook `twilio-status-webhook` con validación de firma, idempotencia por `(provider, external_id, event_type)` y sin retroceso de «entregado». Ejercido contra Twilio el 16/10/2026: llegaron `sent`, `read` y `delivered` firmados y el mensaje terminó en `entregado`; una firma falsificada recibe `403`. **Del correo no hay estados**: la API de Twilio Email es asíncrona y sin webhook, así que queda en `enviado` | `50_integrations.sql`; `twilioWhatsapp.test.ts` › «autenticación del webhook» (8 casos) y «sin la URL fijada no puede reconstruir la de una Edge Function» |
+| REQ-26 | Notificar al usuario cuando el administrador cancela | Implementado | `cancel_reservation` encola `cancelacion_admin` con el motivo, y la respuesta dice si quedó encolado para que el panel lo informe sin adivinar | `30_cancellations.sql` › «cancelación administrativa y aviso por correo» |
+| REQ-27 | Registrar el estado de cada mensaje para trazabilidad | Implementado | Tabla `notification_messages` (`pendiente`, `enviado`, `entregado`, `fallido`, `omitido`) con el `messageId` del proveedor, el tipo de aviso y el error cuando lo hubo; la bitácora guarda sólo el **dominio** del destino, no la dirección. Una incidencia resuelta se descarta sin borrar la fila (`admin_descartar_incidencia`). **De la entrega no hay estado**: la API de Brevo acepta el envío y no informa la entrega, así que `enviado` es el estado final; fingir un «entregado» que nadie puede fijar sería peor que no tenerlo | `50_integrations.sql`; `80_canal_correo.sql` › «el reclamo resuelve el destino y la bitácora lo enmascara» |
 
 ---
 
@@ -110,7 +119,7 @@ solicitud (igual que PostgREST en Supabase):
 | REQ-29 | Asignación de administradores a recintos | Implementado | `facility_admin_assignments` acota a cada administrador a sus recintos, y `is_facility_admin` es el único punto por el que pasan todas las políticas RLS y las funciones del panel. El rol `administrador_general` lo gestiona desde la pestaña «Administradores»: concede el rol de administrador de recintos y le asigna recintos (`admin_general_asignar_administrador`), o se lo retira. Puede concederlo **sin recintos**: `admin_create_facility` asigna el recinto a quien lo crea, así que esa persona crea el primero y queda a su cargo. Exigir uno antes obligaría a inventar un recinto para poder nombrar a nadie, y el «uno o más» del requisito describe el resultado, no el orden de los pasos. Si ese correo todavía no tiene cuenta, el backend responde `sin_cuenta` y el panel ofrece **crearla**: lo hace la Edge Function `crear-administrador`, que comprueba el rol contra la base y crea la cuenta **sin contraseña** —la persona la define por «Olvidé mi contraseña»— de modo que ninguna credencial viaja. Su propio rol **no** se concede desde la aplicación —sólo con `seed-usuarios.sh --administrador-general`— para que una cuenta comprometida no pueda crear más | `90_administrador_general.sql` (5 escenarios, la mitad comprobando lo que **no** puede hacer); `mockRepository.test.ts` › «administrador general (REQ-29)» (6 casos) |
 | REQ-30 | Definir y modificar bloques horarios y la capacidad máxima | Implementado | `BloquesSeccion` para el bloque suelto y `SerieBloquesForm` para publicar una temporada entera: `admin_create_block_series` acepta un rango de fechas, varias horas de inicio y días de la semana, interpreta las horas en hora local de Santiago, exige una vista previa antes de escribir y es idempotente (repetirla no duplica); `admin_deactivate_block_series` retira la serie sin cancelar las reservas confirmadas y las informa. Privilegios de columna + RLS sobre `time_blocks`; índice único que impide dos bloques activos con el mismo inicio en un recinto | `60_block_series.sql` (10 escenarios, incluidos hora local, idempotencia y omisión del pasado); `40_rls.sql`; `reservationRules.test.ts` › `validarBloqueHorario` (6 casos) |
 | REQ-31 | Consultar reservas vigentes e históricas por recinto | Implementado | `admin_list_reservations(facility_id, scope)`. Devuelve el **nombre** de quien reservó, nunca su correo ni su teléfono | `40_rls.sql` › «admin_list_reservations expone datos personales» (debe fallar) |
-| REQ-32 | Cancelar reservas de sus recintos, liberando el cupo y notificando | Implementado | `cancel_reservation()` por la vía de administrador: sin ventana de 2 horas, con motivo obligatoriamente registrado en auditoría | `30_cancellations.sql` › «cancelación administrativa y aviso por WhatsApp» |
+| REQ-32 | Cancelar reservas de sus recintos, liberando el cupo y notificando | Implementado | `cancel_reservation()` por la vía de administrador: sin ventana de 2 horas, con motivo obligatoriamente registrado en auditoría | `30_cancellations.sql` › «cancelación administrativa y aviso por correo» |
 | REQ-33 | Mostrar el estado de las sincronizaciones externas de cada reserva | Implementado | `admin_integration_report()` + pestaña «Integraciones»: resumen, incidencias y último error de cada cola. Una incidencia en error ya resuelta se **descarta** (`admin_descartar_incidencia`): deja de contar en el informe, pero la fila se conserva con quién la descartó, porque REQ-27 exige poder responder después qué pasó con el mensaje de una reserva | `50_integrations.sql` › «informe de integraciones del administrador» y «descartar incidencias retira del informe sin borrar la fila» (10 aserciones, la mitad sobre quién **no** puede descartar) |
 
 ---
@@ -125,7 +134,7 @@ solicitud (igual que PostgREST en Supabase):
 | Cancelaciones con 2 horas de anticipación mínima | `cancel_reservation`, camino de dueño |
 | Sólo el administrador general crea cuentas de administrador y les asigna recintos | `prevent_profile_privilege_escalation` bloquea cualquier otro camino, incluida una escritura directa; `admin_general_asignar_administrador` vuelve a comprobar el rol; crear la cuenta lo hace la Edge Function `crear-administrador`, que verifica el rol contra la base antes de usar la clave de servicio |
 | Sólo el dueño o el administrador del recinto cancelan; el administrador sin ventana | `cancel_reservation` decide por el rol real del solicitante |
-| WhatsApp requiere consentimiento y número válido | Restricción de tabla, `claim_notification_jobs` filtra por consentimiento, y el worker revalida E.164 |
+| Las notificaciones requieren consentimiento y un destino válido | Restricción de tabla, `claim_notification_jobs` filtra por consentimiento vigente, y el worker revalida la dirección antes de enviar |
 | La conexión con Calendar es voluntaria y desconectarla no afecta la reserva | `google-calendar-disconnect` sólo toca `calendar_sync_status`; nunca `status` |
 | Supabase es la fuente oficial; los estados de integración son informativos | Ningún camino de código cambia `reservations.status` por un fallo externo. Verificado explícitamente en `50_integrations.sql` |
 | Sólo usuarios registrados pueden reservar | `auth.uid() IS NULL` lanza; `create_reservation_strict` no está concedida a `anon` |
@@ -140,7 +149,7 @@ solicitud (igual que PostgREST en Supabase):
 |---|---|---|
 | Elasticidad: 100 usuarios concurrentes sin degradar ni generar sobrecupos | Bloqueo por fila (no por tabla), índices sobre `block_id` y `next_attempt_at`, colas con `SKIP LOCKED` | `test:concurrency`: 92 solicitudes resueltas en 655 ms en local y 100 en la verificación automática, 0 sobrecupos. Cada solicitud simultánea abre una conexión, así que la prueba usa las que el servidor admita y avisa si fueron menos de 100 |
 | Seguridad: contraseñas cifradas, HTTPS/TLS, llaves y tokens sólo en backend, mínimo privilegio | Supabase Auth gestiona las contraseñas; CloudFront fuerza HTTPS; tokens cifrados con AES-256-GCM y columnas sin privilegio de lectura; `REVOKE ALL` y concesiones explícitas por columna | `docs/SEGURIDAD.md`; `10_schema.sql` › «ninguna función de public es ejecutable por anon» |
-| Interoperabilidad: APIs oficiales REST/OAuth 2.0, ≥95 % de éxito | Clientes propios contra las APIs oficiales, con clasificación de errores transitorios y reintentos con retroceso | `googleCalendar.test.ts`, `twilioWhatsapp.test.ts` (58 casos combinados) |
+| Interoperabilidad: APIs oficiales REST/OAuth 2.0, ≥95 % de éxito | Clientes propios contra las APIs oficiales, con clasificación de errores transitorios y reintentos con retroceso | `googleCalendar.test.ts` (23 casos) y `brevoEmail.test.ts` (10 casos) |
 | Disponibilidad ≥99 % | Supabase gestionado + CloudFront; las integraciones degradan sin afectar la reserva | `docs/OPERACION.md` (monitoreo y recuperación) |
 | Confiabilidad: consistencia ante solicitudes simultáneas; si una integración falla, la reserva se registra y se reintenta | Transacción + colas con reintentos. Un fallo definitivo marca `error` pero **no** toca la reserva | `50_integrations.sql` › «un fallo de Google invalidó la reserva (no debe ocurrir)» |
 | Usabilidad: flujo de 4 pasos como máximo | Indicador `PasosReserva` visible: Filtrar → Elegir bloque → Confirmar → Listo | `src/domain/pasosReserva.ts`, `src/components/PasosReserva.tsx` |
@@ -153,7 +162,7 @@ solicitud (igual que PostgREST en Supabase):
 |---|---|
 | Manual técnico de despliegue | `docs/DESPLIEGUE_AWS.md`, `docs/CONFIGURACION_SUPABASE.md` |
 | Guía de uso para usuarios y administradores | `docs/GUIA_USUARIO.md`, `docs/GUIA_ADMINISTRADOR.md` |
-| Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) y por una prueba equivalente sobre las plantillas de WhatsApp |
+| Interfaz únicamente en español | Todo el texto visible está en español. Verificado por `errors.test.ts` (ausencia de palabras en inglés en los mensajes traducidos) |
 | Linter configurado en el repositorio | ESLint con configuración plana sobre `src/`, `supabase/functions/` y `scripts/`. **La configuración anterior sólo declaraba `files: ["**/*.js"]`, por lo que no revisaba ningún archivo del proyecto**; se corrigió |
 | Pruebas automatizadas de las funcionalidades críticas, ejecutadas antes de integrar | 276 pruebas con Vitest + 10 archivos SQL + 6 escenarios de concurrencia. `npm run verify` encadena lint, typecheck, test y build |
 
@@ -169,7 +178,7 @@ Lo único que falta para operar en producción. No hay código pendiente.
 | Cadena de conexión a la base de datos | `SUPABASE_DB_URL` del operador | `CONFIGURACION_SUPABASE.md` |
 | `ENCRYPTION_KEY` y `CRON_SECRET` | Secretos de Edge Functions | `CONFIGURACION_SUPABASE.md` |
 | Cliente OAuth de Google (id, secreto, redirect URI) | Secretos de Edge Functions | `CONFIGURACION_GOOGLE_CALENDAR.md` |
-| Cuenta de Twilio, emisor de WhatsApp y plantillas aprobadas | Secretos de Edge Functions | `CONFIGURACION_TWILIO_WHATSAPP.md` |
+| Cuenta de Brevo y remitente verificado | Secretos de Edge Functions | `CONFIGURACION_CORREO.md` § 6.1 |
 | Bucket S3, distribución CloudFront y dominio | Variables del pipeline | `DESPLIEGUE_AWS.md` |
 | URLs de redirección de Supabase Auth | Panel de Supabase | `CONFIGURACION_SUPABASE.md` |
 | Programación de `pg_cron` | `supabase/cron/schedule.sql`, una vez por entorno | `OPERACION.md` |
@@ -181,20 +190,21 @@ Lo único que falta para operar en producción. No hay código pendiente.
 
 Declaradas de forma explícita, sin presentarlas como resueltas:
 
-1. **Las integraciones no se han ejercido contra las APIs reales de Google y
-   Twilio**, porque eso exige cuentas con credenciales productivas. Lo que sí
-   está verificado es el contrato completo con `fetch` simulado: alcances,
-   idempotencia, clasificación de errores, reintentos y validación de firma.
-   Los pasos de verificación con las cuentas reales están en
-   `CONFIGURACION_GOOGLE_CALENDAR.md` y `CONFIGURACION_TWILIO_WHATSAPP.md`.
+1. **Las pruebas automatizadas no llaman a las APIs reales de Google ni de
+   Brevo**, porque eso exige cuentas con credenciales productivas. Lo que sí
+   está verificado en ellas es el contrato completo con `fetch` simulado:
+   alcances, idempotencia, clasificación de errores y reintentos. Los dos
+   canales **sí** se ejercieron a mano contra las cuentas reales; los pasos
+   están en `CONFIGURACION_GOOGLE_CALENDAR.md` y `CONFIGURACION_CORREO.md`.
 
 2. **La programación con `pg_cron` requiere un paso manual por entorno**
    (`supabase/cron/schedule.sql`), porque la URL de las funciones y el
    `CRON_SECRET` son distintos en cada proyecto y no deben versionarse.
 
-3. **En producción, WhatsApp exige plantillas aprobadas por Meta.** El código
-   admite ambos caminos (plantilla aprobada por `ContentSid`, o texto libre para
-   el Sandbox), pero la aprobación de las plantillas es un trámite externo.
+3. **Del correo no se sabe si se entregó.** La API de Brevo acepta el envío y
+   no informa la entrega, así que el estado final de un envío correcto es
+   `enviado`. La cadena para consumir eventos existe (`webhook_events`, con
+   antirréplica); lo que falta es la función que los aplique.
 
 4. **Realtime no alcanza a los visitantes anónimos.** Por diseño, `anon` no
    tiene privilegio de lectura sobre `public.reservations`, así que no recibe
@@ -273,13 +283,13 @@ por el flujo normal. El aviso no asegura el cupo.
   cancelaciones y encola el aviso, pero **sólo si la cancelación dejó
   cupo real**: dos cancelaciones simultáneas no avisan dos veces por el
   mismo hueco.
-- El aviso sale por cada canal que la persona haya consentido, así que la
-  elección entre WhatsApp y correo es la que ya hizo en «Datos
-  personales» y no una decisión fija del sistema.
+- El aviso sale si la persona tiene consentidas las notificaciones en
+  «Datos personales», que es la misma decisión que gobierna la
+  confirmación y el recordatorio.
 - El texto dice explícitamente que el cupo **todavía no es suyo**:
   prometer lo contrario sería engañoso, y el cupo lo toma quien reserve
   primero.
-- Sin ningún canal consentido la solicitud se consume igualmente: dejarla
+- Sin consentimiento la solicitud se consume igualmente: dejarla
   pendiente la haría reaparecer en cada cancelación futura.
 
 *Evidencia:* `95_aviso_cupo_liberado.sql` (5 escenarios, incluidos el de

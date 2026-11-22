@@ -72,7 +72,7 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
       conError: contar((i) => i.estado === "error" || i.estado === "fallido"),
       pendientes: contar((i) => i.estado === "pendiente" || i.estado === "procesando"),
       calendario: contar((i) => i.tipo === "google_calendar"),
-      whatsapp: contar((i) => i.tipo === "whatsapp"),
+      notificaciones: contar((i) => i.tipo === "notificacion"),
     };
   }, [lista]);
 
@@ -82,7 +82,7 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Estado de integraciones</h2>
           <p className="text-sm text-slate-600">
-            Sincronizaciones con Google Calendar y envíos de WhatsApp de las reservas de tus
+            Sincronizaciones con Google Calendar y envíos de correo de las reservas de tus
             recintos. Una integración con error nunca invalida la reserva.
           </p>
         </div>
@@ -114,7 +114,7 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
       ) : lista.length === 0 ? (
         <SinDatos
           titulo="No hay actividad de integraciones"
-          descripcion="Cuando haya reservas con Google Calendar conectado o avisos por WhatsApp, su estado aparecerá aquí."
+          descripcion="Cuando haya reservas con Google Calendar conectado o avisos por correo, su estado aparecerá aquí."
         />
       ) : (
         <>
@@ -158,7 +158,7 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="min-w-full text-sm">
               <caption className="sr-only">
-                Registros de sincronización con Google Calendar y de envíos de WhatsApp
+                Registros de sincronización con Google Calendar y de envíos de correo
               </caption>
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -183,7 +183,7 @@ export default function IntegracionesSeccion({ repositorio }: Props) {
                     <tr key={`${incidencia.tipo}-${incidencia.referenciaId}`} className="align-top">
                       <td className="whitespace-nowrap px-4 py-3">
                         <Insignia tono={incidencia.tipo === "google_calendar" ? "info" : "exito"}>
-                          {incidencia.tipo === "google_calendar" ? "Google Calendar" : "WhatsApp"}
+                          {incidencia.tipo === "google_calendar" ? "Google Calendar" : "Correo"}
                         </Insignia>
                       </td>
 

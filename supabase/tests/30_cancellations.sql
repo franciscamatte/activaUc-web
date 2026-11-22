@@ -133,9 +133,9 @@ begin
   values (_fac, now() + interval '30 minutes', now() + interval '90 minutes', 3)
   returning id into _bloque;
 
-  -- Usuario con consentimiento de WhatsApp, para comprobar REQ-26.
+  -- Usuario con el consentimiento de avisos, para comprobar REQ-26.
   perform test_helpers.login_as(_usuario);
-  perform public.set_whatsapp_consent('+56987654321', true);
+  perform public.set_email_consent(true);
   _res := (public.create_reservation_strict(_bloque) ->> 'reservation_id')::uuid;
 
   -- ---------------------------------------------------------------
@@ -167,9 +167,9 @@ begin
     'El cupo no se liberó tras la cancelación administrativa';
 
   -- ---------------------------------------------------------------
-  -- REQ-26 · se encola el aviso por WhatsApp al usuario afectado.
+  -- REQ-26 · se encola el aviso por correo al usuario afectado.
   -- ---------------------------------------------------------------
-  assert (_r ->> 'notificacion_whatsapp')::boolean,
+  assert (_r ->> 'notificacion_encolada')::boolean,
     'No se marcó el envío de notificación al usuario';
   assert exists (
     select 1 from public.notification_jobs
@@ -186,7 +186,7 @@ begin
       and status in ('pendiente', 'procesando', 'error')
   ), 'Quedaron notificaciones activas de una reserva cancelada';
 
-  raise notice 'OK · cancelación administrativa y aviso por WhatsApp';
+  raise notice 'OK · cancelación administrativa y aviso por correo';
 end;
 $$;
 

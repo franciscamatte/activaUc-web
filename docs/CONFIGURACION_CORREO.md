@@ -193,11 +193,6 @@ Tres caminos, en orden de preferencia para este proyecto:
    el código de 6 dígitos esto ya no bloquea a nadie: el correo llega,
    aunque tarde, y el código sigue sirviendo una hora.
 
-> **Twilio Email no sirve para esto.** En el plan de prueba el remitente
-> es fijo, `ACxxxx@twilio.email`, un dominio que no controlas y que
-> `@uc.cl` va a filtrar igual o peor. Para notificaciones de reserva
-> —donde da igual quién firme— puede valer; para autenticación, no.
-
 ---
 
 ## 4. Caducidad
@@ -219,66 +214,19 @@ que se hace una vez por entorno, no vale la pena.
 
 ---
 
-## 6. Otra cosa: las notificaciones de reserva por correo
+## 6. Las notificaciones de reserva
 
 Lo de arriba es el correo de **autenticación**, que manda Supabase. Aparte
-existe el correo de **notificaciones** —confirmación y recordatorio de
-reserva—, que manda Twilio y que cada persona activa o no en «Datos
-personales».
+existe el de **notificaciones** —confirmación, recordatorio, aviso de
+cancelación y aviso de cupo liberado—, que manda ActivaUC por la API de
+Brevo y que cada persona activa o no en «Datos personales».
 
-Son canales independientes del de WhatsApp: se puede tener uno, el otro,
-los dos o ninguno. Lo decide `profiles.email_consent`, y sin
-consentimiento no sale nada.
+Es el **único** canal de notificaciones. Hubo uno de WhatsApp por Twilio,
+retirado del producto; lo que queda de él es el historial de envíos en
+`notification_messages`, que no se borra porque el canal deje de usarse.
+Lo decide `profiles.email_consent`, y sin consentimiento no sale nada.
 
-### 6.1 Lo que el plan de prueba de Twilio permite
-
-Lo mismo que con WhatsApp: **el contenido no es libre**. Comprobado el
-16/10/2026 contra la cuenta real:
-
-```
-POST comms.twilio.com/v1/Emails   (asunto y HTML de ActivaUC)
-→ HTTP 400 · Invalid template: email content does not match any approved template
-```
-
-Y el remitente también es fijo, `<AccountSid>@twilio.email`.
-
-Para ejercer la cadena completa sin pagar se fija el contenido con el de
-una plantilla de muestra, copiado **tal cual** de la consola (Messaging →
-Try it out → Send an email):
-
-```bash
-TWILIO_EMAIL_ASUNTO_FIJO='Reminder: Your Upcoming Appointment'
-TWILIO_EMAIL_HTML_FIJO='<p><b>This is a test email from Twilio.</b></p>…'
-```
-
-> Las comillas simples no son opcionales: `.env.secrets` lo interpreta el
-> shell, y un valor con espacios sin comillas rompe la carga.
-
-Con eso verificado el 16/10/2026: reserva → cola → despacho inmediato →
-worker → Twilio, correo aceptado en **3 s** con su `operationId`, y
-WhatsApp en paralelo en 2 s.
-
-### 6.1.1 Por eso el canal pasó a Brevo (17/10/2026)
-
-Al reservar con una cuenta nueva el aviso no llegó, y el webhook
-registró:
-
-```
-574002 · The recipient email address is not verified for this trial
-```
-
-Es decir, además de limitar el contenido a plantillas de muestra, el
-plan de prueba de Twilio **sólo entrega a destinatarios verificados en
-la cuenta**. Con las dos restricciones juntas, ese canal no sirve para
-terceros: habría que verificar a mano a cada compañero.
-
-Brevo no tiene ninguna de las dos en su plan gratuito —contenido propio
-y 300 correos al día a quien sea—, y ya estaba configurado para los
-correos de autenticación, así que no añade una cuenta más que mantener.
-
-**Cómo se activa.** Definiendo `BREVO_API_KEY`: si está, las
-notificaciones salen por Brevo; si no, siguen por Twilio. No hay que
-tocar código.
+### 6.1 Cómo se configura
 
 ```bash
 BREVO_API_KEY=xkeysib-…          # la API key, NO la SMTP key
@@ -294,6 +242,9 @@ BREVO_EMAIL_FROM_NAME=ActivaUC
 > salientes en los puertos de SMTP, cosa que Brevo advierte en su
 > documentación.
 
+Sin esas variables el worker responde «el canal de correo no está
+configurado» (503) y no encola nada a ciegas.
+
 Dos decisiones del emisor que conviene conocer:
 
 - **Un error de configuración no gasta reintentos.** Si falta la clave o
@@ -305,24 +256,18 @@ Dos decisiones del emisor que conviene conocer:
 
 Cubierto en `src/test/brevoEmail.test.ts` (10 casos).
 
-### 6.2 Lo que requiere salir de Trial
+### 6.2 Lo que no hay: estados de entrega
 
-Vaciar las dos variables y ya: entonces se envían el asunto y el cuerpo
-propios de ActivaUC, con los datos de la reserva
-(`buildSubject` / `buildEmailHtml`). Conviene además verificar un dominio
-propio en Twilio y ponerlo en `TWILIO_EMAIL_FROM`, porque un correo desde
-`@twilio.email` hacia `@uc.cl` se va a filtrar igual que los de
-autenticación.
+La API de Brevo acepta el envío y devuelve un `messageId`; **no informa
+la entrega**. Brevo tiene webhooks de eventos, pero ActivaUC no los
+consume, así que un envío correcto se queda en `enviado` y nunca pasa a
+`entregado`.
 
-### 6.3 Lo que no hay
-
-La API de correo de Twilio es **asíncrona y sin webhook de estados**: no
-devuelve el identificador de un mensaje, sino un `operationId` de la
-operación encolada. Eso significa que del correo se sabe que Twilio lo
-aceptó, no que se entregó, y que `whatsapp_messages.status` se queda en
-`enviado` sin pasar a `entregado` como sí ocurre en WhatsApp. Para
-seguirle la pista hay que ir a la consola de Twilio con ese
-`operationId`.
+Eso es deliberado, no un olvido: la alternativa era dejar un estado que
+nadie puede fijar y que se leería como «no se entregó». Si algún día hace
+falta, la cadena ya está preparada —`webhook_events` guarda los eventos
+con antirréplica y la trazabilidad distingue cada estado—, y lo que
+faltaría es la función que los aplique.
 
 ---
 

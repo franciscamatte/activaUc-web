@@ -14,7 +14,7 @@ recintos que tienes asignados**:
 - Ver las reservas vigentes y el historial.
 - Cancelar reservas (por mantención, por ejemplo), sin la restricción de 2 horas
   que sí aplica a las personas usuarias.
-- Revisar el estado de las integraciones con Google Calendar y WhatsApp.
+- Revisar el estado de las integraciones con Google Calendar y el correo.
 - Consultar la auditoría de las acciones sobre tus recintos.
 
 Esta restricción no es sólo visual: el sistema **vuelve a verificar** en cada
@@ -27,7 +27,7 @@ tengas su identificador.
 El correo y el teléfono de las personas que reservan **no están disponibles en
 el panel**, por protección de datos. Ves su nombre, que es lo necesario para
 gestionar un recinto. Si necesitas contactar a alguien, el sistema le envía los
-avisos por WhatsApp de forma automática cuando cancelas su reserva.
+avisos por correo de forma automática cuando cancelas su reserva.
 
 ---
 
@@ -140,8 +140,8 @@ la reserva y el estado de sus integraciones.
 Qué ocurre al cancelar:
 
 - El cupo queda disponible **de inmediato** para otras personas.
-- Si la persona tiene WhatsApp habilitado, recibe un aviso con el motivo. El
-  panel te dice si se encoló ese aviso o si la persona no tiene WhatsApp
+- Si la persona tiene los avisos activados, recibe uno con el motivo. El
+  panel te dice si se encoló ese aviso o si la persona no los tiene
   habilitado.
 - Si tenía el evento en su Google Calendar, se elimina.
 - Queda registrado en la auditoría: quién canceló, cuándo y por qué.
@@ -151,7 +151,7 @@ Qué ocurre al cancelar:
 
 ### Integraciones
 
-Estado de las sincronizaciones con Google Calendar y de los envíos de WhatsApp
+Estado de las sincronizaciones con Google Calendar y de los envíos de correo
 de las reservas de tus recintos.
 
 Arriba, un resumen: total de registros, cuántos tienen error, cuántos están
@@ -163,7 +163,7 @@ pendientes y cuántos corresponden a Google Calendar.
 | **Pendiente** / **En proceso** | Está en cola; se resuelve solo en el próximo ciclo |
 | **Con error** / **Falló** | Se agotaron los reintentos. Requiere revisión técnica |
 | **Cancelado** | Ya no corresponde (por ejemplo, la reserva se canceló antes de sincronizar) |
-| **Omitido** | No aplicaba (la persona no tiene WhatsApp habilitado) |
+| **Omitido** | No aplicaba (la persona no tiene los avisos activados) |
 
 **Lo importante**: una integración con error **no invalida la reserva**. La
 persona tiene su cupo garantizado; lo que falló es el evento de calendario o el
@@ -292,7 +292,7 @@ Recuerda: reducir la capacidad no cancela reservas existentes.
 
 **¿Puedo ver el teléfono de alguien para llamarle?**
 No. El panel muestra sólo el nombre, por protección de datos. Al cancelar una
-reserva, el sistema le avisa automáticamente por WhatsApp si tiene el número
+reserva, el sistema le avisa automáticamente por correo si activó los avisos
 registrado.
 
 **¿Puedo cancelar una reserva de otro recinto?**

@@ -10,7 +10,7 @@ declare
   _esperadas text[] := array[
     'profiles', 'facilities', 'time_blocks', 'facility_admin_assignments',
     'reservations', 'reservation_audit_log', 'calendar_connections',
-    'calendar_sync_jobs', 'whatsapp_messages', 'notification_jobs',
+    'calendar_sync_jobs', 'notification_messages', 'notification_jobs',
     'webhook_events', 'oauth_states', 'rate_limit_counters',
     'block_watchers'
   ];

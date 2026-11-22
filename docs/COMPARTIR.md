@@ -14,7 +14,7 @@ hoy corre en tu máquina.
 
 Eso significa que, en cualquiera de las tres opciones, **las reservas
 que ellos hagan son reales**: ocupan cupo, generan evento de Calendar y
-mensaje de WhatsApp. Si vas a probar con mucha gente, conviene crear
+correo de aviso. Si vas a probar con mucha gente, conviene crear
 recintos de prueba en vez de usar los definitivos.
 
 ---

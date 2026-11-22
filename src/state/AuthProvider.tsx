@@ -226,9 +226,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       await cargarPerfil(repositorio);
     },
 
-    definirConsentimientoWhatsapp: async (telefono, consentido) => {
+    actualizarTelefono: async (telefono) => {
       if (!repositorio) throw aAppError(new Error("Repositorio no disponible."));
-      const resultado = await repositorio.definirConsentimientoWhatsapp(telefono, consentido);
+      const resultado = await repositorio.actualizarTelefono(telefono);
       if (resultado.ok) await cargarPerfil(repositorio);
       return resultado;
     },

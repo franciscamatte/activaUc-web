@@ -48,37 +48,22 @@ OBLIGATORIOS=(
 # Que una integración falte no es un error: las Edge Functions
 # correspondientes responden «integración no configurada» y el resto del
 # sistema sigue funcionando. Así se puede poner en marcha Calendar
-# primero y WhatsApp más adelante, sin tocar nada.
+# primero y el correo más adelante, sin tocar nada.
 GRUPO_GOOGLE=(
   GOOGLE_CLIENT_ID
   GOOGLE_CLIENT_SECRET
   GOOGLE_REDIRECT_URI
 )
 
-GRUPO_TWILIO=(
-  TWILIO_ACCOUNT_SID
-  TWILIO_AUTH_TOKEN
-  TWILIO_WHATSAPP_FROM
+GRUPO_CORREO=(
+  BREVO_API_KEY
+  BREVO_EMAIL_FROM
 )
 
 OPCIONALES=(
   APP_ALLOWED_ORIGINS           # lista de orígenes permitidos para CORS
   APP_TIME_ZONE                 # por omisión America/Santiago
-  TWILIO_STATUS_CALLBACK_URL    # webhook público de estados
-  TWILIO_WEBHOOK_URL            # URL exacta que firma Twilio
-  TWILIO_CONTENT_SID_CONFIRMACION
-  TWILIO_CONTENT_SID_RECORDATORIO
-  TWILIO_CONTENT_SID_CANCELACION
-  TWILIO_CONTENT_VARS_CONFIRMACION   # orden de variables de cada plantilla
-  TWILIO_CONTENT_VARS_RECORDATORIO
-  TWILIO_CONTENT_VARS_CANCELACION
-  TWILIO_EMAIL_FROM              # remitente del canal de correo
-  TWILIO_EMAIL_FROM_NAME
-  TWILIO_EMAIL_ASUNTO_FIJO       # sólo para cuenta Trial
-  TWILIO_EMAIL_HTML_FIJO
-  BREVO_API_KEY                  # canal de correo preferido
-  BREVO_EMAIL_FROM
-  BREVO_EMAIL_FROM_NAME
+  BREVO_EMAIL_FROM_NAME         # nombre visible del remitente
 )
 
 # SUPABASE_URL, SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY los inyecta
@@ -174,7 +159,7 @@ evaluar_grupo() {
 
 echo "Integraciones detectadas:"
 evaluar_grupo "Google Calendar" "${GRUPO_GOOGLE[@]}"
-evaluar_grupo "Twilio WhatsApp" "${GRUPO_TWILIO[@]}"
+evaluar_grupo "Correo (Brevo)" "${GRUPO_CORREO[@]}"
 echo ""
 
 for nombre in "${RESERVADOS[@]}"; do
@@ -222,9 +207,9 @@ if [[ -n "${GOOGLE_REDIRECT_URI:-}" ]]; then
   fi
 fi
 
-if [[ -n "${TWILIO_WHATSAPP_FROM:-}" ]]; then
-  if [[ ! "$TWILIO_WHATSAPP_FROM" =~ ^\+[1-9][0-9]{7,14}$ ]]; then
-    echo "TWILIO_WHATSAPP_FROM debe estar en formato E.164, por ejemplo +14155238886." >&2
+if [[ -n "${BREVO_EMAIL_FROM:-}" ]]; then
+  if [[ ! "$BREVO_EMAIL_FROM" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+    echo "BREVO_EMAIL_FROM debe ser una dirección de correo verificada en Brevo." >&2
     exit 1
   fi
 fi

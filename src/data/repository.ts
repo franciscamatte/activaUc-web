@@ -134,11 +134,13 @@ export interface ActivaRepository {
   // --- Perfil -------------------------------------------------------
   obtenerPerfil(): Promise<Perfil | null>;
   actualizarNombre(nombre: string): Promise<void>;
-  /** REQ-22 / REQ-23 · otorgar o revocar el consentimiento de WhatsApp. */
-  definirConsentimientoWhatsapp(
-    telefono: string | null,
-    consentido: boolean,
-  ): Promise<{ ok: boolean; mensaje: string }>;
+  /**
+   * REQ-7 · registrar o borrar el teléfono.
+   *
+   * Es un dato de contacto del perfil y nada más: las notificaciones
+   * van por correo, así que guardarlo no activa ningún envío.
+   */
+  actualizarTelefono(telefono: string | null): Promise<{ ok: boolean; mensaje: string }>;
   /**
    * REQ-22 / REQ-23 para el canal de correo.
    *

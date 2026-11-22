@@ -269,7 +269,6 @@ El script respeta la verificación de JWT que cada función necesita:
 | `crear-administrador` | sí | JWT del usuario, y además comprueba contra la base que sea administrador general |
 | `process-calendar-jobs` | no | `x-cron-secret` o la service role key |
 | `process-notification-jobs` | no | `x-cron-secret` o la service role key |
-| `twilio-status-webhook` | no | Firma `X-Twilio-Signature` |
 | `cron-dispatch` | no | `x-cron-secret` |
 
 Comprueba que los workers **no** sean públicos:
@@ -300,7 +299,7 @@ Deja dos tareas programadas:
 
 | Tarea | Frecuencia | Qué hace |
 |---|---|---|
-| `activauc_integraciones` | cada minuto | Dispara los workers de Calendar y WhatsApp: reintentos, recordatorios vencidos y trabajos huérfanos. Lo recién encolado no espera aquí, lo despacha un disparador |
+| `activauc_integraciones` | cada minuto | Dispara los workers de Calendar y de correo: reintentos, recordatorios vencidos y trabajos huérfanos. Lo recién encolado no espera aquí, lo despacha un disparador |
 | `activauc_limpieza` | cada hora (min. 17) | Borra `oauth_states` vencidos, contadores viejos y webhooks de más de 90 días |
 
 Verifica:

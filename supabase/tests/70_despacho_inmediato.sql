@@ -55,7 +55,7 @@ begin
   values (_u, 'conectado', 'v1.a.b', 'v1.a.b', now() + interval '1 hour');
 
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56911112222', true);
+  perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type)
   values ('Recinto Despacho', 'Fútbol') returning id into _fac;
@@ -133,7 +133,7 @@ begin
   -- el trabajo tiene scheduled_for vencido pero next_attempt_at futuro.
   _u := test_helpers.create_user('d3@uc.cl', 'Fran Backoff');
   perform test_helpers.login_as(_u);
-  perform public.set_whatsapp_consent('+56933334444', true);
+  perform public.set_email_consent(true);
 
   insert into public.facilities (name, facility_type)
   values ('Recinto Backoff', 'Tenis') returning id into _fac;

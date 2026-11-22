@@ -43,11 +43,11 @@ begin
 
   -- Una reserva de cada usuario, en recintos distintos.
   perform test_helpers.login_as(_u1);
-  perform public.set_whatsapp_consent('+56911111111', true);
+  perform public.set_email_consent(true);
   _res1 := (public.create_reservation_strict(_blk_a) ->> 'reservation_id')::uuid;
 
   perform test_helpers.login_as(_u2);
-  perform public.set_whatsapp_consent('+56922222222', true);
+  perform public.set_email_consent(true);
   _res2 := (public.create_reservation_strict(_blk_b) ->> 'reservation_id')::uuid;
 
   perform test_helpers.logout();
@@ -195,13 +195,19 @@ begin
   assert (select full_name from public.profiles where id = _u1) = 'Paula Actualizada',
     'El usuario no pudo actualizar su propio nombre';
 
-  -- No puede tocar el consentimiento por SQL directo (sólo vía función).
+  -- El consentimiento de avisos sólo se cambia por su función, nunca
+  -- con una escritura directa.
   begin
-    update public.profiles set whatsapp_consent = false where id = _u1;
-    assert false, 'Un usuario pudo cambiar whatsapp_consent por SQL directo';
+    update public.profiles set email_consent = false where id = _u1;
+    assert false, 'Un usuario pudo cambiar email_consent por SQL directo';
   exception
     when insufficient_privilege then null;
   end;
+
+  -- El teléfono sí es suyo para escribir (REQ-7), pero sólo el propio.
+  update public.profiles set phone = '+56911112222' where id = _u1;
+  assert (select phone from public.profiles where id = _u1) = '+56911112222',
+    'El usuario no pudo registrar su propio teléfono';
 
   -- No puede crear recintos ni bloques.
   begin
@@ -355,10 +361,10 @@ begin
   select count(*) into _n from public.profiles;
   assert _n = 1, format('El administrador ve %s perfiles, debía ver sólo el suyo', _n);
 
-  -- No puede leer el teléfono registrado en whatsapp_messages.
+  -- No puede leer el destino registrado en notification_messages.
   begin
-    perform to_phone from public.whatsapp_messages;
-    assert false, 'El administrador pudo leer to_phone de whatsapp_messages';
+    perform to_phone from public.notification_messages;
+    assert false, 'El administrador pudo leer to_phone de notification_messages';
   exception
     when insufficient_privilege then null;
   end;
@@ -405,7 +411,7 @@ begin
   end;
 
   begin
-    perform public.apply_whatsapp_status('SM1', 'delivered', null);
+    perform public.apply_notification_status('SM1', 'delivered', null);
     assert false, 'Un usuario pudo forzar el estado de un mensaje';
   exception
     when insufficient_privilege then null;

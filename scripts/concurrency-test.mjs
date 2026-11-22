@@ -391,7 +391,7 @@ async function escenarioReintento(base) {
     [userId],
   );
   await comoUsuario(base.client, userId, () =>
-    base.client.query("select public.set_whatsapp_consent('+56912121212', true)"));
+    base.client.query("select public.set_email_consent(true)"));
 
   const client = await conectar(base.url);
   try {

@@ -8,7 +8,7 @@
 # lista de procesos.
 #
 # Deja programadas dos tareas:
-#   · cada minuto  -> dispara los workers de Calendar y WhatsApp,
+#   · cada minuto  -> dispara los workers de Calendar y de correo,
 #                     incluidos los recordatorios vencidos
 #   · cada hora    -> limpia states de OAuth vencidos y contadores
 #
@@ -167,7 +167,7 @@ mostrar_estado
 cat <<EOF
 
 Listo. A partir de ahora los eventos de Calendar y los mensajes de
-WhatsApp se procesan solos, cada minuto.
+correo se procesan solos, cada minuto.
 
 Para comprobarlo dentro de un par de minutos:
   bash scripts/schedule-cron.sh --estado

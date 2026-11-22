@@ -15,7 +15,7 @@ Modelo de seguridad de ActivaUC y resultado de la revisión aplicada.
 3. **Los secretos no cruzan al navegador.** El cliente conoce la URL del
    proyecto y la clave `anon`, nada más.
 4. **Un fallo de integración no compromete los datos.** Supabase es la fuente
-   oficial; Google Calendar y WhatsApp son informativos.
+   oficial; Google Calendar y las notificaciones son informativos.
 5. **Lo que se registra no identifica a nadie.** Teléfonos enmascarados, correos
    reducidos al dominio, tokens nunca.
 
@@ -68,7 +68,7 @@ Verificado en `supabase/tests/40_rls.sql` › «no puede escalar su rol».
 | `oauth_states` | nada | nada | nada |
 | `calendar_sync_jobs` | nada | el estado de los propios | los de sus recintos |
 | `notification_jobs` | nada | el estado de los propios | los de sus recintos |
-| `whatsapp_messages` | nada | los propios | estado sí, **`to_phone` no** |
+| `notification_messages` | nada | los propios | estado sí, **el destino no** |
 | `webhook_events` | nada | nada | nada |
 | `rate_limit_counters` | nada | nada | nada |
 
@@ -138,14 +138,15 @@ exponerse en el cliente web**.
 personal necesita saber a quién corresponde cada cupo. No devuelve el correo ni
 el teléfono: no hacen falta para gestionar un recinto.
 
-En `whatsapp_messages`, la columna `to_phone` no está en el `GRANT` para
-`authenticated`, así que ni el administrador puede leerla con un `select *`.
+En `notification_messages`, las columnas del destino no están en el `GRANT`
+para `authenticated`, así que ni el administrador puede leerlas con un
+`select *`.
 
 Verificado en `40_rls.sql`:
 
 ```sql
 begin
-  perform to_phone from public.whatsapp_messages;
+  perform to_phone from public.notification_messages;
   assert false, 'El administrador pudo leer to_phone';
 exception when insufficient_privilege then null;
 end;
@@ -154,7 +155,7 @@ end;
 ### Consentimiento
 
 - Registrar un teléfono exige consentimiento explícito. La base lo impone:
-  `check (whatsapp_consent = false or phone is not null)`.
+  `check (email_consent = false or email_consent_at is not null)`.
 - Revocar borra el teléfono, apaga el consentimiento y **cancela los trabajos de
   notificación pendientes**.
 - El worker tampoco reclama trabajos de usuarios sin consentimiento vigente: no
@@ -171,10 +172,10 @@ end;
 | Capa | Conoce |
 |---|---|
 | Navegador | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL`, `VITE_TIME_ZONE` |
-| Edge Functions | `ENCRYPTION_KEY`, `CRON_SECRET`, credenciales de Google y Twilio, `SUPABASE_SERVICE_ROLE_KEY` (inyectada) |
+| Edge Functions | `ENCRYPTION_KEY`, `CRON_SECRET`, credenciales de Google y de Brevo, `SUPABASE_SERVICE_ROLE_KEY` (inyectada) |
 | Base de datos | `private.app_config`: URL de las funciones y `CRON_SECRET`, en un esquema sin acceso para `anon` ni `authenticated` |
 
-No existe ninguna variable `VITE_GOOGLE_*` ni `VITE_TWILIO_*`, y no debe
+No existe ninguna variable `VITE_GOOGLE_*` ni `VITE_BREVO_*`, y no debe
 existir: `VITE_*` se incrusta en el paquete JavaScript.
 
 ### Defensa contra el error más costoso
@@ -229,32 +230,14 @@ clave de prueba inyectada aborta con código 1.
 
 ## 7. Webhooks
 
-`twilio-status-webhook` es público porque lo llama Twilio, pero nunca sin
-autenticar:
+Hoy **no hay ninguno expuesto**. El webhook de estados de Twilio se retiró
+con el canal de WhatsApp, y el proveedor de correo no informa la entrega.
 
-1. **Firma.** Valida `X-Twilio-Signature` (HMAC-SHA1 del URL más los pares
-   ordenados) con comparación en tiempo constante. Sin firma válida responde
-   `403` y no toca la base.
-2. **Idempotencia y anti-replay.** `register_webhook_event` tiene una
-   restricción única sobre `(provider, external_id, event_type)`. Una reentrega
-   del mismo evento se descarta y responde `200`, para que Twilio no reintente
-   indefinidamente.
-3. **Sin retroceso de estado.** Un `sent` que llega después de un `delivered` no
-   degrada el mensaje.
-4. **Entradas acotadas.** Los estados desconocidos se ignoran; el payload que se
-   guarda lleva el teléfono enmascarado.
-
-Casos verificados en `src/test/twilioWhatsapp.test.ts`: firma ausente,
-inventada, de otro Auth Token, **de otra URL** (lo que impediría reenviar una
-solicitud legítima a otro endpoint), con un parámetro alterado y con un
-parámetro añadido.
-
-Los workers de integración no son endpoints públicos: exigen `x-cron-secret` o
-la service role key, comparados en tiempo constante. Si `CRON_SECRET` no está
-configurado, rechazan todo: es preferible que el worker no funcione a que quede
-abierto.
-
----
+Lo que queda preparado por si vuelve a hacer falta: `webhook_events` tiene
+una restricción única sobre `(provider, external_id, event_type)`, de modo
+que una reentrega se descarta en lugar de aplicarse dos veces, y
+`register_webhook_event` es la única vía de escritura. Las demás funciones
+públicas del backend exigen sesión, y los workers, `CRON_SECRET`.
 
 ## 8. Validación de entradas
 
@@ -322,22 +305,22 @@ Revisión del requisito 15 del encargo, con los hallazgos reales.
 
 | Punto | Resultado |
 |---|---|
-| Secretos hardcodeados en el código | **Ninguno.** Búsqueda de patrones de JWT, `GOCSPX-`, `sk_live`, SID de Twilio y claves de SendGrid en `src/`, `supabase/` y `scripts/` |
-| Tokens en el frontend | **Ninguno.** `Deno.env` no aparece en `src/`; no hay variables `VITE_*` de Google ni Twilio |
+| Secretos hardcodeados en el código | **Ninguno.** Búsqueda de patrones de JWT, `GOCSPX-`, `sk_live`, `xkeysib-` y claves de SendGrid en `src/`, `supabase/` y `scripts/` |
+| Tokens en el frontend | **Ninguno.** `Deno.env` no aparece en `src/`; no hay variables `VITE_*` de Google ni de Brevo |
 | Service role key expuesta | **No.** Triple barrera (arranque, pre-compilación, post-compilación). Escáner verificado en ambos sentidos |
-| Auth Token de Twilio expuesto | **No.** Sólo se usa en `process-notification-jobs` y en la validación de firma del webhook |
-| Llamadas directas a Google o Twilio desde el navegador | **Ninguna.** Verificado buscando `googleapis.com`, `api.twilio.com` y `accounts.google.com` en `src/` |
+| Clave del proveedor de correo expuesta | **No.** Sólo se usa en `process-notification-jobs` y en `crear-administrador` |
+| Llamadas directas a Google o a Brevo desde el navegador | **Ninguna.** Verificado buscando `googleapis.com`, `api.brevo.com` y `accounts.google.com` en `src/` |
 | Registros con datos sensibles | **Redacción obligatoria** en `_shared/log.ts`: claves con nombre sensible se reemplazan, teléfonos se reducen a 4 dígitos, correos al dominio |
 | XSS | Sin `dangerouslySetInnerHTML`, `innerHTML` ni `eval`. CSP documentada |
 | Validación de entradas | En tres capas para el teléfono; restricciones `CHECK` para el resto |
 | CORS | Lista blanca por origen, con `Vary: Origin` |
 | CSRF en OAuth | `state` firmado, de un solo uso, con vencimiento. Prueba específica de suplantación de usuario |
-| Webhooks sin autenticar | **Ninguno.** El de Twilio valida firma; los workers exigen `CRON_SECRET` |
+| Webhooks sin autenticar | **Ninguno.** No hay webhooks expuestos; los workers exigen `CRON_SECRET` |
 | Replay | Restricción única en `webhook_events`; consumo atómico de `oauth_states` |
 | Idempotencia | Claves determinísticas en ambas colas; id de evento derivado del id de reserva |
-| Permisos RLS | 13 tablas con RLS; privilegios por columna; verificado con los roles reales en `40_rls.sql` |
+| Permisos RLS | 14 tablas con RLS; privilegios por columna; verificado con los roles reales en `40_rls.sql` |
 | Acceso administrativo | Acotado a `facility_admin_assignments` en toda política y función |
-| Filtración de teléfonos y correos | `to_phone` fuera del `GRANT`; informes sin datos personales; pruebas que fallan si eso cambia |
+| Filtración de teléfonos y correos | El destino fuera del `GRANT`; informes sin datos personales; pruebas que fallan si eso cambia |
 | Inyección SQL | Todo parametrizado; único `EXECUTE` dinámico sobre una lista fija con `%I` |
 | Abuso de endpoints | Límite por usuario en las tres acciones sensibles |
 
@@ -358,7 +341,7 @@ Se dejan registrados porque eran reales:
 
 3. **Error de tipos en `fail_notification_job`.** Un `CASE` con dos ramas de
    literal sin tipo producía `text` donde se esperaba el enum `job_status`, de
-   modo que **registrar un fallo de WhatsApp habría fallado en tiempo de
+   modo que **registrar un fallo de envío habría fallado en tiempo de
    ejecución**. Lo detectó `supabase/tests/50_integrations.sql`.
 
 4. **`ORDER BY` inválido tras `UNION ALL`** en `admin_integration_report`: el
@@ -429,7 +412,7 @@ Los puntos 1 a 3 y 5 están automatizados en las pruebas, así que
 | Credencial | Cómo | Impacto |
 |---|---|---|
 | `CRON_SECRET` | `set-secrets.sh` y luego `supabase/cron/schedule.sql` con el nuevo valor | Entre ambos pasos las tareas fallan con 401; los trabajos quedan en cola |
-| `TWILIO_AUTH_TOKEN` | Rotar en Twilio, recargar el secreto, redesplegar | Los webhooks en vuelo con el token viejo se rechazarán |
+| `BREVO_API_KEY` | Rotar en Brevo, recargar el secreto, redesplegar | Entre ambos pasos los envíos fallan y quedan en cola con reintentos |
 | `GOOGLE_CLIENT_SECRET` | Rotar en Google Cloud, recargar, redesplegar | Los refresh tokens guardados siguen siendo válidos |
 | `ENCRYPTION_KEY` | **Invalida todos los tokens guardados.** Ver `CONFIGURACION_GOOGLE_CALENDAR.md` § 9 | Las personas deben reconectar su calendario. Las reservas no se afectan |
 | `SUPABASE_ANON_KEY` | Rotar en Supabase, recompilar y desplegar el frontend | Las sesiones activas se invalidan |

@@ -45,7 +45,7 @@ begin
   assert (_r ->> 'calendar_sync_status') = 'no_aplica',
     format('calendar_sync_status esperado no_aplica, obtenido %s', _r ->> 'calendar_sync_status');
   -- Sin consentimiento no se encola ningún mensaje.
-  assert (_r ->> 'whatsapp_confirmacion') = 'omitido', 'Se encoló WhatsApp sin consentimiento';
+  assert (_r ->> 'notificacion_confirmacion') = 'omitido', 'Se encoló un aviso sin consentimiento';
   assert not exists (select 1 from public.notification_jobs where reservation_id = (_r ->> 'reservation_id')::uuid),
     'Se creó un trabajo de notificación sin consentimiento';
 
@@ -150,10 +150,10 @@ declare
   _u uuid; _fac uuid; _b_lejano uuid; _b_cercano uuid;
   _r jsonb; _reserva uuid;
 begin
-  -- Usuario con consentimiento de WhatsApp vigente.
+  -- Usuario con el consentimiento de avisos vigente.
   _u := test_helpers.create_user('r5@uc.cl', 'Eva Reserva');
   perform test_helpers.login_as(_u);
-  _r := public.set_whatsapp_consent('+56912345678', true);
+  _r := public.set_email_consent(true);
   assert (_r ->> 'ok')::boolean, format('No se registró el consentimiento: %s', _r);
 
   insert into public.facilities (name, facility_type)
@@ -168,8 +168,8 @@ begin
 
   _r := public.create_reservation_strict(_b_lejano);
   _reserva := (_r ->> 'reservation_id')::uuid;
-  assert (_r ->> 'whatsapp_confirmacion') = 'pendiente', 'No se encoló la confirmación';
-  assert (_r ->> 'whatsapp_recordatorio') = 'programado', 'No se programó el recordatorio';
+  assert (_r ->> 'notificacion_confirmacion') = 'pendiente', 'No se encoló la confirmación';
+  assert (_r ->> 'notificacion_recordatorio') = 'programado', 'No se programó el recordatorio';
 
   assert (select scheduled_for from public.notification_jobs
           where reservation_id = _reserva and kind = 'recordatorio')
@@ -185,9 +185,9 @@ begin
 
   _r := public.create_reservation_strict(_b_cercano);
   _reserva := (_r ->> 'reservation_id')::uuid;
-  assert (_r ->> 'whatsapp_confirmacion') = 'pendiente', 'No se encoló la confirmación cercana';
-  assert (_r ->> 'whatsapp_recordatorio') = 'omitido',
-    format('Con menos de 2 horas no debe haber recordatorio, obtuvo: %s', _r ->> 'whatsapp_recordatorio');
+  assert (_r ->> 'notificacion_confirmacion') = 'pendiente', 'No se encoló la confirmación cercana';
+  assert (_r ->> 'notificacion_recordatorio') = 'omitido',
+    format('Con menos de 2 horas no debe haber recordatorio, obtuvo: %s', _r ->> 'notificacion_recordatorio');
   assert not exists (
     select 1 from public.notification_jobs
     where reservation_id = _reserva and kind = 'recordatorio'

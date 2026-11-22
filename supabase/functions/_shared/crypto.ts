@@ -97,19 +97,6 @@ export async function hmacSha256Hex(secret: string, message: string): Promise<st
   return toHex(new Uint8Array(signature));
 }
 
-/** HMAC-SHA1 en base64 (formato de firma de los webhooks de Twilio). */
-export async function hmacSha1Base64(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-1" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return base64Encode(new Uint8Array(signature));
-}
-
 export async function sha256Hex(message: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(message));
   return toHex(new Uint8Array(digest));

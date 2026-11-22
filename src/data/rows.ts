@@ -27,8 +27,6 @@ export interface FilaPerfil {
   id: string;
   full_name: string;
   phone: string | null;
-  whatsapp_consent: boolean;
-  whatsapp_consent_at: string | null;
   email_consent: boolean;
   email_consent_at: string | null;
   role: Rol;
@@ -81,8 +79,8 @@ export interface FilaReserva {
   is_past: boolean;
   calendar_sync_status: EstadoSincronizacion;
   has_calendar_event: boolean;
-  whatsapp_confirmation_status: EstadoMensaje;
-  whatsapp_reminder_status: EstadoMensaje;
+  notification_confirmation_status: EstadoMensaje;
+  notification_reminder_status: EstadoMensaje;
   cancelled_at: string | null;
   cancelled_by_role: Rol | null;
   cancel_reason: string | null;
@@ -101,7 +99,7 @@ export interface FilaReservaAdmin {
   user_display_name: string;
   calendar_sync_status: EstadoSincronizacion;
   has_calendar_event: boolean;
-  whatsapp_status: EstadoMensaje;
+  notification_status: EstadoMensaje;
   cancelled_by_role: Rol | null;
   cancel_reason: string | null;
   created_at: string;
@@ -116,7 +114,7 @@ export interface FilaConexionCalendario {
 }
 
 export interface FilaIncidencia {
-  kind: "google_calendar" | "whatsapp";
+  kind: "google_calendar" | "notificacion";
   reference_id: string;
   facility_id: string;
   facility_name: string;
@@ -147,8 +145,6 @@ export function aPerfil(fila: FilaPerfil, correo: string): Perfil {
     nombre: fila.full_name,
     correo,
     telefono: fila.phone,
-    whatsappConsentido: fila.whatsapp_consent,
-    whatsappConsentidoEn: fila.whatsapp_consent_at,
     correoConsentido: fila.email_consent,
     correoConsentidoEn: fila.email_consent_at,
     rol: fila.role,
@@ -209,8 +205,8 @@ export function aReserva(fila: FilaReserva): Reserva {
     esPasada: fila.is_past,
     calendarSync: fila.calendar_sync_status,
     tieneEventoCalendario: fila.has_calendar_event,
-    whatsappConfirmacion: fila.whatsapp_confirmation_status,
-    whatsappRecordatorio: fila.whatsapp_reminder_status,
+    notificacionConfirmacion: fila.notification_confirmation_status,
+    notificacionRecordatorio: fila.notification_reminder_status,
     canceladaEn: fila.cancelled_at,
     canceladaPorRol: fila.cancelled_by_role,
     motivoCancelacion: fila.cancel_reason,
@@ -231,7 +227,7 @@ export function aReservaAdmin(fila: FilaReservaAdmin): ReservaAdmin {
     usuarioNombre: fila.user_display_name,
     calendarSync: fila.calendar_sync_status,
     tieneEventoCalendario: fila.has_calendar_event,
-    whatsappEstado: fila.whatsapp_status,
+    notificacionEstado: fila.notification_status,
     canceladaPorRol: fila.cancelled_by_role,
     motivoCancelacion: fila.cancel_reason,
     creadaEn: fila.created_at,
@@ -296,11 +292,16 @@ export function etiquetaAccionAuditoria(accion: string): string {
     calendar_error: "Error de sincronización con Google Calendar",
     calendar_conectado: "Google Calendar conectado",
     calendar_desconectado: "Google Calendar desconectado",
+    notificacion_enviada: "Notificación enviada",
+    notificacion_fallida: "Falló el envío de la notificación",
+    notificacion_omitida: "Notificación omitida",
+    // Las tres de abajo sólo aparecen en filas anteriores a la retirada
+    // del canal de WhatsApp. Se traducen porque la bitácora las conserva.
     whatsapp_enviado: "Mensaje de WhatsApp enviado",
     whatsapp_fallido: "Falló el envío de WhatsApp",
     whatsapp_omitido: "Mensaje de WhatsApp omitido",
-    consentimiento_otorgado: "Consentimiento de WhatsApp otorgado",
-    consentimiento_revocado: "Consentimiento de WhatsApp revocado",
+    consentimiento_otorgado: "Consentimiento de avisos otorgado",
+    consentimiento_revocado: "Consentimiento de avisos revocado",
     recinto_creado: "Recinto creado",
     recinto_actualizado: "Recinto actualizado",
     recinto_desactivado: "Recinto desactivado",

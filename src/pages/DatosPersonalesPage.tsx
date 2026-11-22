@@ -8,7 +8,7 @@ import { aAppError } from "../lib/errors";
 import { esModoMock } from "../data";
 import Alerta from "../components/ui/Alerta";
 import Boton from "../components/ui/Boton";
-import { CampoCasilla, CampoTexto } from "../components/ui/Campo";
+import { CampoTexto } from "../components/ui/Campo";
 import Insignia from "../components/ui/Insignia";
 import Modal from "../components/ui/Modal";
 import { Cargando } from "../components/ui/Estados";
@@ -34,7 +34,7 @@ const MOTIVOS_CALENDARIO: Record<string, string> = {
   error_interno: "Tuvimos un problema al guardar la conexión. Inténtalo de nuevo.",
 };
 
-/** REQ-7, REQ-17, REQ-22, REQ-23 · datos personales, WhatsApp y Calendar. */
+/** REQ-7, REQ-17, REQ-22, REQ-23 · datos personales, avisos y Calendar. */
 export default function DatosPersonalesPage() {
   const {
     perfil,
@@ -47,7 +47,7 @@ export default function DatosPersonalesPage() {
     errorCalendario: errorEstadoCalendario,
     repositorio,
     actualizarNombre,
-    definirConsentimientoWhatsapp,
+    actualizarTelefono,
     definirConsentimientoCorreo,
     recargarCalendario,
   } = useAuth();
@@ -60,13 +60,11 @@ export default function DatosPersonalesPage() {
   const [guardandoNombre, setGuardandoNombre] = useState(false);
   const [nombreGuardado, setNombreGuardado] = useState(false);
 
-  // --- WhatsApp -----------------------------------------------------
+  // --- Teléfono (REQ-7) ---------------------------------------------
   const [telefono, setTelefono] = useState<string | null>(null);
-  const [consentimiento, setConsentimiento] = useState<boolean | null>(null);
   const [errorTelefono, setErrorTelefono] = useState<string | null>(null);
-  const [guardandoWhatsapp, setGuardandoWhatsapp] = useState(false);
-  const [avisoWhatsapp, setAvisoWhatsapp] = useState<string | null>(null);
-  const [confirmarRevocacion, setConfirmarRevocacion] = useState(false);
+  const [guardandoTelefono, setGuardandoTelefono] = useState(false);
+  const [avisoTelefono, setAvisoTelefono] = useState<string | null>(null);
 
   // --- Correo (REQ-22, REQ-23 aplicados al otro canal) ------------
   const [guardandoCorreo, setGuardandoCorreo] = useState(false);
@@ -108,7 +106,6 @@ export default function DatosPersonalesPage() {
   // escribió algo", incluida la cadena vacía.
   const nombreMostrado = nombre ?? perfil?.nombre ?? "";
   const telefonoMostrado = telefono ?? perfil?.telefono ?? "";
-  const consentimientoMostrado = consentimiento ?? perfil?.whatsappConsentido ?? false;
 
   // Tras una conexión exitosa se refresca el estado real desde el
   // servidor y se limpia la URL, que son efectos sobre sistemas
@@ -166,18 +163,13 @@ export default function DatosPersonalesPage() {
     }
   }
 
-  async function guardarWhatsapp(evento: FormEvent) {
+  async function guardarTelefono(evento: FormEvent) {
     evento.preventDefault();
     setErrorTelefono(null);
-    setAvisoWhatsapp(null);
+    setAvisoTelefono(null);
 
-    // Desactivar la casilla equivale a revocar: se pide confirmación.
-    if (!consentimientoMostrado && perfil?.whatsappConsentido) {
-      setConfirmarRevocacion(true);
-      return;
-    }
-
-    if (consentimientoMostrado) {
+    const vacio = telefonoMostrado.trim() === "";
+    if (!vacio) {
       const problema = validarTelefono(telefonoMostrado);
       if (problema) {
         setErrorTelefono(problema);
@@ -185,34 +177,21 @@ export default function DatosPersonalesPage() {
       }
     }
 
-    setGuardandoWhatsapp(true);
+    setGuardandoTelefono(true);
     try {
-      const resultado = await definirConsentimientoWhatsapp(
-        consentimientoMostrado ? normalizarTelefono(telefonoMostrado) : null,
-        consentimientoMostrado,
+      const resultado = await actualizarTelefono(
+        vacio ? null : normalizarTelefono(telefonoMostrado),
       );
-      if (resultado.ok) setAvisoWhatsapp(resultado.mensaje);
-      else setErrorTelefono(resultado.mensaje);
+      if (resultado.ok) {
+        setAvisoTelefono(resultado.mensaje);
+        setTelefono(null);
+      } else {
+        setErrorTelefono(resultado.mensaje);
+      }
     } catch (e) {
-      setErrorTelefono(aAppError(e, "guardar tus preferencias").message);
+      setErrorTelefono(aAppError(e, "guardar tu teléfono").message);
     } finally {
-      setGuardandoWhatsapp(false);
-    }
-  }
-
-  async function revocarConsentimiento() {
-    setGuardandoWhatsapp(true);
-    setErrorTelefono(null);
-    try {
-      const resultado = await definirConsentimientoWhatsapp(null, false);
-      setConfirmarRevocacion(false);
-      setTelefono(null);
-      setConsentimiento(null);
-      if (resultado.ok) setAvisoWhatsapp(resultado.mensaje);
-    } catch (e) {
-      setErrorTelefono(aAppError(e, "revocar el consentimiento").message);
-    } finally {
-      setGuardandoWhatsapp(false);
+      setGuardandoTelefono(false);
     }
   }
 
@@ -305,94 +284,61 @@ export default function DatosPersonalesPage() {
         </Boton>
       </form>
 
-      {/* --- WhatsApp (REQ-22, REQ-23) -------------------------------- */}
+      {/* --- Teléfono (REQ-7) ---------------------------------------- */}
       <form
-        onSubmit={guardarWhatsapp}
+        onSubmit={guardarTelefono}
         noValidate
         className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">
-            Notificaciones por WhatsApp
-          </h2>
-          {perfil.whatsappConsentido ? (
-            <Insignia tono="exito">Activadas</Insignia>
+          <h2 className="text-base font-semibold text-slate-900">Teléfono</h2>
+          {perfil.telefono ? (
+            <Insignia tono="exito">Registrado</Insignia>
           ) : (
-            <Insignia tono="neutro">Desactivadas</Insignia>
+            <Insignia tono="neutro">Sin registrar</Insignia>
           )}
         </div>
 
         <p className="text-sm text-slate-600">
-          Si registras tu número, te enviaremos la confirmación de cada reserva y un
-          recordatorio 2 horas antes del bloque. Puedes revocar este permiso cuando
-          quieras.
+          Es un dato de contacto para la administración del recinto. Los avisos de
+          tus reservas llegan por correo, así que registrarlo no activa ningún
+          envío. Puedes dejarlo en blanco para borrarlo.
         </p>
 
-        {perfil.whatsappConsentido && perfil.telefono ? (
+        {perfil.telefono ? (
           <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm">
             <p className="text-emerald-800">Número registrado</p>
             <p className="font-medium text-emerald-950">
               {enmascararTelefono(perfil.telefono)}
             </p>
-            {perfil.whatsappConsentidoEn ? (
-              <p className="mt-1 text-xs text-emerald-800">
-                Consentimiento otorgado el {formatearFechaHora(perfil.whatsappConsentidoEn)}.
-              </p>
-            ) : null}
           </div>
         ) : null}
 
-        <CampoCasilla
-          etiqueta="Acepto recibir confirmaciones y recordatorios de mis reservas por WhatsApp."
-          checked={consentimientoMostrado}
+        <CampoTexto
+          etiqueta="Número de teléfono"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={telefonoMostrado}
           onChange={(e) => {
-            setConsentimiento(e.target.checked);
-            setAvisoWhatsapp(null);
+            setTelefono(e.target.value);
             setErrorTelefono(null);
+            setAvisoTelefono(null);
           }}
-          ayuda="Es necesario registrar un número válido para activar los envíos."
+          error={errorTelefono}
+          ayuda="Formato internacional, por ejemplo +56912345678."
+          placeholder="+56912345678"
         />
 
-        {consentimientoMostrado ? (
-          <CampoTexto
-            etiqueta="Número de WhatsApp"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            value={telefonoMostrado}
-            onChange={(e) => {
-              setTelefono(e.target.value);
-              setErrorTelefono(null);
-            }}
-            error={errorTelefono}
-            ayuda="Formato internacional, por ejemplo +56912345678."
-            placeholder="+56912345678"
-          />
-        ) : errorTelefono ? (
-          <Alerta tono="error">{errorTelefono}</Alerta>
-        ) : null}
-
-        {avisoWhatsapp ? (
-          <Alerta tono="exito" onCerrar={() => setAvisoWhatsapp(null)}>
-            {avisoWhatsapp}
+        {avisoTelefono ? (
+          <Alerta tono="exito" onCerrar={() => setAvisoTelefono(null)}>
+            {avisoTelefono}
           </Alerta>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Boton type="submit" cargando={guardandoWhatsapp}>
-            Guardar preferencias
-          </Boton>
-
-          {perfil.whatsappConsentido ? (
-            <Boton
-              variante="peligro"
-              onClick={() => setConfirmarRevocacion(true)}
-              disabled={guardandoWhatsapp}
-            >
-              Eliminar número y revocar
-            </Boton>
-          ) : null}
-        </div>
+        <Boton type="submit" cargando={guardandoTelefono}>
+          Guardar teléfono
+        </Boton>
       </form>
 
       {/* --- Correo (REQ-22, REQ-23) --------------------------------- */}
@@ -564,36 +510,6 @@ export default function DatosPersonalesPage() {
       </div>
 
       {/* --- Diálogos de confirmación -------------------------------- */}
-      <Modal
-        abierto={confirmarRevocacion}
-        titulo="Revocar notificaciones por WhatsApp"
-        descripcion="Eliminaremos tu número y dejaremos de enviarte mensajes."
-        onCerrar={() => setConfirmarRevocacion(false)}
-        acciones={
-          <>
-            <Boton
-              variante="secundario"
-              onClick={() => setConfirmarRevocacion(false)}
-              disabled={guardandoWhatsapp}
-            >
-              Mantener activadas
-            </Boton>
-            <Boton
-              variante="peligro"
-              onClick={() => void revocarConsentimiento()}
-              cargando={guardandoWhatsapp}
-            >
-              Sí, revocar
-            </Boton>
-          </>
-        }
-      >
-        <p>
-          Dejarás de recibir confirmaciones y recordatorios. Los recordatorios que ya
-          estaban programados se cancelarán. Tus reservas no se modifican.
-        </p>
-      </Modal>
-
       <Modal
         abierto={confirmarDesconexion}
         titulo="Desconectar Google Calendar"

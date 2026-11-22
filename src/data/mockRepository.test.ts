@@ -170,7 +170,7 @@ describe("sesión", () => {
   });
 });
 
-describe("perfil y consentimiento de WhatsApp", () => {
+describe("perfil, teléfono y consentimiento de avisos", () => {
   beforeEach(async () => {
     await repo.iniciarSesion(CORREO, CLAVE);
   });
@@ -184,26 +184,32 @@ describe("perfil y consentimiento de WhatsApp", () => {
     await expect(repo.actualizarNombre("A")).rejects.toThrow(/entre 2 y 120/);
   });
 
-  it("rechaza un teléfono fuera del formato E.164 (REQ-22)", async () => {
-    const resultado = await repo.definirConsentimientoWhatsapp("912345678", true);
+  it("rechaza un teléfono fuera del formato E.164 (REQ-7)", async () => {
+    const resultado = await repo.actualizarTelefono("912345678");
 
     expect(resultado.ok).toBe(false);
     expect(resultado.mensaje).toContain("E.164");
-    expect((await repo.obtenerPerfil())?.whatsappConsentido).toBe(false);
+    expect((await repo.obtenerPerfil())?.telefono).toBeNull();
   });
 
-  it("registra el número con consentimiento (REQ-22)", async () => {
-    const resultado = await repo.definirConsentimientoWhatsapp("+56 9 1234 5678", true);
+  it("registra el teléfono y lo borra (REQ-7)", async () => {
+    const resultado = await repo.actualizarTelefono("+56 9 1234 5678");
 
     expect(resultado.ok).toBe(true);
-    const perfil = await repo.obtenerPerfil();
+    let perfil = await repo.obtenerPerfil();
     expect(perfil?.telefono).toBe("+56912345678");
-    expect(perfil?.whatsappConsentido).toBe(true);
-    expect(perfil?.whatsappConsentidoEn).not.toBeNull();
+
+    // Guardar el teléfono no activa ningún aviso: ese consentimiento es
+    // del canal de correo y se da aparte.
+    expect(perfil?.correoConsentido).toBe(false);
+
+    expect((await repo.actualizarTelefono(null)).ok).toBe(true);
+    perfil = await repo.obtenerPerfil();
+    expect(perfil?.telefono).toBeNull();
   });
 
-  it("revocar elimina el número y detiene los envíos pendientes (REQ-23)", async () => {
-    await repo.definirConsentimientoWhatsapp("+56912345678", true);
+  it("activa los avisos por correo y los revoca (REQ-22, REQ-23)", async () => {
+    expect((await repo.definirConsentimientoCorreo(true)).ok).toBe(true);
 
     const bloques = await repo.consultarDisponibilidad({
       fechaDesde: "", fechaHasta: "", tipoRecinto: "", recintoId: "",
@@ -217,20 +223,19 @@ describe("perfil y consentimiento de WhatsApp", () => {
 
     let misReservas = await repo.listarMisReservas();
     let reserva = misReservas.find((r) => r.id === creada.reservaId)!;
-    expect(reserva.whatsappConfirmacion).toBe("pendiente");
-    expect(reserva.whatsappRecordatorio).toBe("pendiente");
+    expect(reserva.notificacionConfirmacion).toBe("pendiente");
+    expect(reserva.notificacionRecordatorio).toBe("pendiente");
 
-    const revocacion = await repo.definirConsentimientoWhatsapp(null, false);
+    const revocacion = await repo.definirConsentimientoCorreo(false);
     expect(revocacion.ok).toBe(true);
 
     const perfil = await repo.obtenerPerfil();
-    expect(perfil?.telefono).toBeNull();
-    expect(perfil?.whatsappConsentido).toBe(false);
+    expect(perfil?.correoConsentido).toBe(false);
 
     misReservas = await repo.listarMisReservas();
     reserva = misReservas.find((r) => r.id === creada.reservaId)!;
-    expect(reserva.whatsappConfirmacion).toBe("omitido");
-    expect(reserva.whatsappRecordatorio).toBe("omitido");
+    expect(reserva.notificacionConfirmacion).toBe("omitido");
+    expect(reserva.notificacionRecordatorio).toBe("omitido");
   });
 
   it("no simula una conexión con Google Calendar", async () => {
@@ -386,21 +391,21 @@ describe("reservas", () => {
   });
 
   it("marca el recordatorio según la regla de 2 horas (REQ-25)", async () => {
-    await repo.definirConsentimientoWhatsapp("+56912345678", true);
+    await repo.definirConsentimientoCorreo(true);
 
     const lejano = await bloqueLibre(4);
     const resultado = await repo.crearReserva(lejano.bloqueId);
 
-    expect(resultado.whatsappConfirmacion).toBe("pendiente");
-    expect(resultado.whatsappRecordatorio).toBe("programado");
+    expect(resultado.notificacionConfirmacion).toBe("pendiente");
+    expect(resultado.notificacionRecordatorio).toBe("programado");
   });
 
-  it("omite WhatsApp sin consentimiento (REQ-22)", async () => {
+  it("no encola avisos sin consentimiento de correo (REQ-22)", async () => {
     const bloque = await bloqueLibre();
     const resultado = await repo.crearReserva(bloque.bloqueId);
 
-    expect(resultado.whatsappConfirmacion).toBe("omitido");
-    expect(resultado.whatsappRecordatorio).toBe("omitido");
+    expect(resultado.notificacionConfirmacion).toBe("omitido");
+    expect(resultado.notificacionRecordatorio).toBe("omitido");
   });
 
   it("no reporta sincronización con Calendar si no hay conexión (REQ-21)", async () => {
@@ -499,9 +504,9 @@ describe("cancelaciones", () => {
   });
 
   it("el administrador cancela sin la ventana de 2 horas y notifica (REQ-26, REQ-32)", async () => {
-    // La usuaria reserva un bloque cercano y tiene WhatsApp habilitado.
+    // La usuaria reserva un bloque cercano y tiene los avisos activados.
     await repo.iniciarSesion(CORREO, CLAVE);
-    await repo.definirConsentimientoWhatsapp("+56912345678", true);
+    await repo.definirConsentimientoCorreo(true);
 
     const bloques = await repo.consultarDisponibilidad(sinFiltros);
     const cercano = bloques.find((b) => {
@@ -528,7 +533,7 @@ describe("cancelaciones", () => {
 
     expect(resultado.ok).toBe(true);
     expect(resultado.canceladoPor).toBe("administrador");
-    expect(resultado.notificacionWhatsapp).toBe(true);
+    expect(resultado.notificacionEncolada).toBe(true);
   });
 });
 
@@ -682,7 +687,7 @@ describe("administración", () => {
 
   it("el listado administrativo no expone correos ni teléfonos", async () => {
     await repo.iniciarSesion(CORREO, CLAVE);
-    await repo.definirConsentimientoWhatsapp("+56912345678", true);
+    await repo.actualizarTelefono("+56912345678");
 
     const bloques = await repo.consultarDisponibilidad({
       fechaDesde: "", fechaHasta: "", tipoRecinto: "", recintoId: "",

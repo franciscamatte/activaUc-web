@@ -104,7 +104,7 @@ export function AvisoModoDemo() {
   return (
     <div className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">
       Modo demostración local: los datos son de ejemplo y las integraciones con
-      Google Calendar y WhatsApp están desactivadas.
+      Google Calendar y los avisos por correo están desactivadas.
     </div>
   );
 }

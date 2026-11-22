@@ -260,15 +260,15 @@ export default function CatalogoPage() {
                 .
               </li>
             ) : null}
-            {resultado.whatsappConfirmacion === "pendiente" ? (
-              <li>Te enviaremos la confirmación por WhatsApp en unos instantes.</li>
+            {resultado.notificacionConfirmacion === "pendiente" ? (
+              <li>Te enviaremos la confirmación por correo en unos instantes.</li>
             ) : null}
-            {resultado.whatsappRecordatorio === "programado" ? (
-              <li>Recibirás un recordatorio por WhatsApp 2 horas antes del bloque.</li>
+            {resultado.notificacionRecordatorio === "programado" ? (
+              <li>Recibirás un recordatorio por correo 2 horas antes del bloque.</li>
             ) : null}
-            {resultado.whatsappConfirmacion === "omitido" && !perfil?.whatsappConsentido ? (
+            {resultado.notificacionConfirmacion === "omitido" && !perfil?.correoConsentido ? (
               <li>
-                Para recibir confirmaciones y recordatorios por WhatsApp, registra tu número
+                Para recibir confirmaciones y recordatorios por correo, actívalos
                 en{" "}
                 <Link to="/datos-personales" className="font-medium underline">
                   Datos personales
@@ -591,9 +591,9 @@ export default function CatalogoPage() {
               {calendario?.estado === "conectado" ? (
                 <li>Crearemos el evento en tu Google Calendar automáticamente.</li>
               ) : null}
-              {perfil?.whatsappConsentido ? (
+              {perfil?.correoConsentido ? (
                 <li>
-                  Te enviaremos la confirmación por WhatsApp
+                  Te enviaremos la confirmación por correo
                   {tendraRecordatorio(seleccionado.inicio)
                     ? " y un recordatorio 2 horas antes."
                     : ". Como el bloque empieza en menos de 2 horas, no habrá recordatorio."}

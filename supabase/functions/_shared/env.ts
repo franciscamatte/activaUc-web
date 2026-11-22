@@ -38,9 +38,3 @@ export const GOOGLE_VARS = [
   "GOOGLE_REDIRECT_URI",
   "ENCRYPTION_KEY",
 ] as const;
-
-export const TWILIO_VARS = [
-  "TWILIO_ACCOUNT_SID",
-  "TWILIO_AUTH_TOKEN",
-  "TWILIO_WHATSAPP_FROM",
-] as const;

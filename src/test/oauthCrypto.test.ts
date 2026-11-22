@@ -3,7 +3,6 @@ import {
   calendarEventId,
   decryptSecret,
   encryptSecret,
-  hmacSha1Base64,
   hmacSha256Hex,
   randomToken,
   sha256Hex,
@@ -167,18 +166,6 @@ describe("funciones HMAC", () => {
     const base = await hmacSha256Hex("secreto", "mensaje");
     expect(await hmacSha256Hex("otro", "mensaje")).not.toBe(base);
     expect(await hmacSha256Hex("secreto", "otro")).not.toBe(base);
-  });
-
-  it("HMAC-SHA1 coincide con el vector de prueba 2 de RFC 2202", async () => {
-    // Clave "Jefe", mensaje "what do ya want for nothing?".
-    // Resumen esperado (hexadecimal): effcdf6ae5eb2fa2d27416d5f184df9c259a7c79
-    // Twilio firma en base64, que es el formato que devuelve la función.
-    const esperadoHex = "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79";
-    const bytes = esperadoHex.match(/../g)!.map((par) => parseInt(par, 16));
-    const esperadoBase64 = btoa(String.fromCharCode(...bytes));
-
-    const firma = await hmacSha1Base64("Jefe", "what do ya want for nothing?");
-    expect(firma).toBe(esperadoBase64);
   });
 });
 

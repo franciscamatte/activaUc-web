@@ -157,7 +157,7 @@ done
 
 # 3. Los valores concretos que este despliegue tiene en el entorno, si
 #    alguno se hubiera filtrado al paquete por error.
-for nombre in GOOGLE_CLIENT_SECRET TWILIO_AUTH_TOKEN ENCRYPTION_KEY CRON_SECRET               SUPABASE_SERVICE_ROLE_KEY; do
+for nombre in GOOGLE_CLIENT_SECRET BREVO_API_KEY ENCRYPTION_KEY CRON_SECRET               SUPABASE_SERVICE_ROLE_KEY; do
   valor="${!nombre:-}"
   # Se ignoran los valores muy cortos para no buscar cadenas triviales.
   [[ ${#valor} -lt 16 ]] && continue

@@ -14,7 +14,7 @@ const CARACTERISTICAS = [
       "Cada reserva se crea con control transaccional en la base de datos, incluso cuando cientos de personas compiten por el mismo bloque.",
   },
   {
-    titulo: "Recordatorios por WhatsApp",
+    titulo: "Recordatorios por correo",
     detalle:
       "Si registras tu número, te confirmamos la reserva y te recordamos el bloque 2 horas antes. Puedes revocarlo cuando quieras.",
   },
@@ -125,7 +125,7 @@ export default function LandingPage() {
           </li>
           <li>
             La administración del recinto puede cancelar reservas por mantención y te
-            avisará por WhatsApp si tienes el número registrado.
+            avisará por correo si activaste los avisos.
           </li>
           <li>
             Tus datos personales (correo y teléfono) sólo son visibles para ti.
