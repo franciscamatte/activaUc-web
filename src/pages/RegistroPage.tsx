@@ -106,7 +106,7 @@ export default function RegistroPage() {
           value={correo}
           onChange={(e) => setCorreo(e.target.value)}
           error={erroresCampo.correo}
-          ayuda="Te enviaremos un enlace para confirmar tu cuenta."
+          ayuda="Te enviaremos un código de confirmación a esta dirección."
           placeholder="nombre@uc.cl"
         />
 

@@ -88,7 +88,7 @@ export default function RestablecerPasswordPage() {
           to="/recuperar-contrasena"
           className="inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
         >
-          Solicitar un enlace nuevo
+          Pedir un código nuevo
         </Link>
       </section>
     );

@@ -14,9 +14,9 @@ const CARACTERISTICAS = [
       "Cada reserva se crea con control transaccional en la base de datos, incluso cuando cientos de personas compiten por el mismo bloque.",
   },
   {
-    titulo: "Recordatorios por correo",
+    titulo: "Avisos por correo",
     detalle:
-      "Si registras tu número, te confirmamos la reserva y te recordamos el bloque 2 horas antes. Puedes revocarlo cuando quieras.",
+      "Actívalos y te llega la confirmación de cada reserva, un recordatorio 2 horas antes y un aviso si se libera un cupo que esperabas. Van al correo de tu cuenta y los desactivas cuando quieras.",
   },
   {
     titulo: "Sincronización con Google Calendar",
@@ -44,7 +44,7 @@ export default function LandingPage() {
           <p className="max-w-xl text-lg leading-relaxed text-slate-600">
             ActivaUC centraliza los recintos, los bloques horarios y los cupos de Deportes UC
             en un solo lugar. Consulta la disponibilidad, reserva y cancela sin formularios
-            ni correos.
+            semanales ni trámites de por medio.
           </p>
 
           <div className="flex flex-wrap gap-3">

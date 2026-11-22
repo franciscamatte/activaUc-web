@@ -224,9 +224,10 @@ permanecen en tu calendario.
    admitir reservas.
 5. La administración del recinto puede cancelar reservas (por mantención, por
    ejemplo) **sin** esa restricción de tiempo, y te avisará por correo si
-   tienes el número registrado.
+   tienes los avisos activados.
 6. Las notificaciones por correo requieren tu **consentimiento explícito** y
-   un número válido. Puedes revocarlo cuando quieras.
+   se desactivan cuando quieras. Van al correo de tu cuenta: no se envía
+   nada a ninguna otra dirección.
 7. La conexión con Google Calendar es **voluntaria** y desconectarla **no
    afecta** tus reservas.
 

@@ -150,7 +150,7 @@ Qué ocurre al cancelar:
 - El cupo queda disponible **de inmediato** para otras personas.
 - Si la persona tiene los avisos activados, recibe uno con el motivo. El
   panel te dice si se encoló ese aviso o si la persona no los tiene
-  habilitado.
+  activados.
 - Si tenía el evento en su Google Calendar, se elimina.
 - Queda registrado en la auditoría: quién canceló, cuándo y por qué.
 
