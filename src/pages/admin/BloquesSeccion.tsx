@@ -19,6 +19,13 @@ interface Props {
   recintos: Recinto[];
 }
 
+/**
+ * Días que se muestran de una vez. Una temporada publicada en serie son
+ * cientos de bloques; mostrarlos todos convierte la sección en un muro
+ * por el que hay que desplazarse para encontrar el de mañana.
+ */
+const DIAS_POR_TANDA = 10;
+
 /** Convierte un valor de <input type="datetime-local"> a ISO. */
 function aIso(valorLocal: string): string {
   return new Date(valorLocal).toISOString();
@@ -57,17 +64,39 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
   const [edicionCapacidad, setEdicionCapacidad] = useState("10");
   const [guardando, setGuardando] = useState(false);
 
+  // Publicar una temporada en serie deja cientos de bloques, y casi
+  // siempre lo que se quiere ver es lo que viene. El pasado está a un
+  // clic, pero no estorba.
+  const [alcance, setAlcance] = useState<"proximos" | "pasados" | "todos">("proximos");
+  const [diasVisibles, setDiasVisibles] = useState(DIAS_POR_TANDA);
+
+  /** Un bloque es pasado cuando ya terminó. */
+  const esPasado = useCallback((bloque: Bloque) => new Date(bloque.fin) <= new Date(), []);
+
   // Los bloques se agrupan por día para que la lista sea manejable.
-  const porDia = useMemo(() => {
+  const porDiaCompleto = useMemo(() => {
     const grupos = new Map<string, Bloque[]>();
     for (const bloque of bloques.datos ?? []) {
+      if (alcance === "proximos" && new Date(bloque.fin) <= new Date()) continue;
+      if (alcance === "pasados" && new Date(bloque.fin) > new Date()) continue;
       const clave = bloque.inicio.slice(0, 10);
       const lista = grupos.get(clave) ?? [];
       lista.push(bloque);
       grupos.set(clave, lista);
     }
-    return [...grupos.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [bloques.datos]);
+    // Lo próximo, en orden cronológico; el pasado, del más reciente al
+    // más antiguo, que es como se busca.
+    const orden = alcance === "proximos"
+      ? (a: string, b: string) => a.localeCompare(b)
+      : (a: string, b: string) => b.localeCompare(a);
+    return [...grupos.entries()].sort(([a], [b]) => orden(a, b));
+  }, [bloques.datos, alcance]);
+
+  const porDia = useMemo(
+    () => porDiaCompleto.slice(0, diasVisibles),
+    [porDiaCompleto, diasVisibles],
+  );
+  const diasOcultos = porDiaCompleto.length - porDia.length;
 
   async function crear(evento: FormEvent) {
     evento.preventDefault();
@@ -193,6 +222,31 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
         ))}
       </CampoSelect>
 
+      <div role="group" aria-label="Qué bloques mostrar" className="flex flex-wrap gap-1">
+        {([
+          { id: "proximos", titulo: "Próximos" },
+          { id: "pasados", titulo: "Pasados" },
+          { id: "todos", titulo: "Todos" },
+        ] as const).map((opcion) => (
+          <button
+            key={opcion.id}
+            type="button"
+            aria-pressed={alcance === opcion.id}
+            onClick={() => {
+              setAlcance(opcion.id);
+              setDiasVisibles(DIAS_POR_TANDA);
+            }}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+              alcance === opcion.id
+                ? "bg-emerald-700 text-white"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            {opcion.titulo}
+          </button>
+        ))}
+      </div>
+
       {aviso ? <Alerta tono="exito" onCerrar={() => setAviso(null)}>{aviso}</Alerta> : null}
       {error ? (
         <Alerta tono="error" onCerrar={() => setError(null)} titulo="No pudimos completar la operación">
@@ -315,36 +369,46 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
                           {bloque.capacidadMaxima}
                         </td>
                         <td className="px-4 py-2.5">
-                          {bloque.activo ? (
+                          {esPasado(bloque) ? (
+                            <Insignia tono="neutro">Pasado</Insignia>
+                          ) : bloque.activo ? (
                             <Insignia tono="exito">Activo</Insignia>
                           ) : (
                             <Insignia tono="neutro">Desactivado</Insignia>
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <div className="flex gap-2">
-                            <Boton
-                              variante="secundario"
-                              tamano="pequeno"
-                              onClick={() => {
-                                setEditando(bloque);
-                                setEdicionInicio(aLocal(bloque.inicio));
-                                setEdicionFin(aLocal(bloque.fin));
-                                setEdicionCapacidad(String(bloque.capacidadMaxima));
-                                setError(null);
-                              }}
-                            >
-                              Editar
-                            </Boton>
-                            <Boton
-                              variante={bloque.activo ? "peligro" : "secundario"}
-                              tamano="pequeno"
-                              onClick={() => void cambiarActivo(bloque, !bloque.activo)}
-                              disabled={guardando}
-                            >
-                              {bloque.activo ? "Desactivar" : "Reactivar"}
-                            </Boton>
-                          </div>
+                          {esPasado(bloque) ? (
+                            // Un bloque que ya terminó no se edita ni se
+                            // desactiva: cambiarle la hora o la capacidad
+                            // no afecta a nada y sí confunde el historial
+                            // de las reservas que tuvo.
+                            <span className="text-xs text-slate-500">Sin acciones</span>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Boton
+                                variante="secundario"
+                                tamano="pequeno"
+                                onClick={() => {
+                                  setEditando(bloque);
+                                  setEdicionInicio(aLocal(bloque.inicio));
+                                  setEdicionFin(aLocal(bloque.fin));
+                                  setEdicionCapacidad(String(bloque.capacidadMaxima));
+                                  setError(null);
+                                }}
+                              >
+                                Editar
+                              </Boton>
+                              <Boton
+                                variante={bloque.activo ? "peligro" : "secundario"}
+                                tamano="pequeno"
+                                onClick={() => void cambiarActivo(bloque, !bloque.activo)}
+                                disabled={guardando}
+                              >
+                                {bloque.activo ? "Desactivar" : "Reactivar"}
+                              </Boton>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -353,6 +417,21 @@ export default function BloquesSeccion({ repositorio, recintos }: Props) {
               </div>
             </div>
           ))}
+
+          {diasOcultos > 0 ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+              <span className="text-slate-600">
+                Quedan {diasOcultos} día(s) más con bloques.
+              </span>
+              <Boton
+                variante="secundario"
+                tamano="pequeno"
+                onClick={() => setDiasVisibles((previos) => previos + DIAS_POR_TANDA)}
+              >
+                Mostrar más días
+              </Boton>
+            </div>
+          ) : null}
         </div>
       )}
 

@@ -441,3 +441,111 @@ begin
   raise notice 'OK · descartar incidencias retira del informe sin borrar la fila';
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- REQ-18, REQ-20 · conectar el calendario después de haber reservado
+-- ---------------------------------------------------------------------
+-- Quien conecta su calendario más tarde esperaría ver ahí las reservas
+-- que ya tenía. Lo que importa de esta comprobación: que se encolen las
+-- futuras, que **no** se encolen las pasadas ni las canceladas, y que
+-- reconectar no duplique nada.
+do $$
+declare
+  _u uuid; _fac uuid; _futura uuid; _pasada uuid; _cancelada uuid;
+  _blk uuid; _n int;
+begin
+  _u := test_helpers.create_user('i30@uc.cl', 'Rosa Reconecta');
+
+  insert into public.facilities (name, facility_type)
+  values ('Recinto Reconexión', 'Fútbol') returning id into _fac;
+
+  -- Una reserva futura, creada SIN calendario conectado.
+  perform test_helpers.login_as(_u);
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '30 hours', now() + interval '31 hours', 4)
+  returning id into _blk;
+  _futura := (public.create_reservation_strict(_blk) ->> 'reservation_id')::uuid;
+
+  assert (select calendar_sync_status::text from public.reservations where id = _futura)
+         = 'no_aplica',
+    'Sin calendario conectado, la reserva no debería tener sincronización';
+  assert not exists (select 1 from public.calendar_sync_jobs where reservation_id = _futura),
+    'Sin calendario conectado no debería encolarse nada';
+
+  -- Y dos que no deben tocarse: una pasada y una cancelada.
+  perform test_helpers.logout();
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() - interval '30 hours', now() - interval '29 hours', 4)
+  returning id into _blk;
+  insert into public.reservations (user_id, facility_id, block_id, starts_at, ends_at, status)
+  values (_u, _fac, _blk, now() - interval '30 hours', now() - interval '29 hours', 'vigente')
+  returning id into _pasada;
+
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '40 hours', now() + interval '41 hours', 4)
+  returning id into _blk;
+  -- `reservations_cancel_consistency` exige la fecha de cancelación.
+  insert into public.reservations
+    (user_id, facility_id, block_id, starts_at, ends_at, status, cancelled_at, cancelled_by_role)
+  values (_u, _fac, _blk, now() + interval '40 hours', now() + interval '41 hours',
+          'cancelada', now(), 'usuario')
+  returning id into _cancelada;
+
+  -- Ahora conecta el calendario.
+  insert into public.calendar_connections
+    (user_id, status, refresh_token_encrypted, access_token_encrypted, access_token_expires_at)
+  values (_u, 'conectado', 'v1.a.b', 'v1.a.b', now() + interval '1 hour');
+
+  assert exists (
+    select 1 from public.calendar_sync_jobs
+     where reservation_id = _futura and kind = 'crear_evento'
+  ), 'Al conectar no se encoló la reserva futura que ya existía';
+
+  assert (select calendar_sync_status::text from public.reservations where id = _futura)
+         = 'pendiente',
+    'La reserva futura debería quedar como pendiente de sincronizar';
+
+  assert not exists (select 1 from public.calendar_sync_jobs where reservation_id = _pasada),
+    'No debería encolarse una reserva que ya pasó';
+  assert not exists (select 1 from public.calendar_sync_jobs where reservation_id = _cancelada),
+    'No debería encolarse una reserva cancelada';
+
+  select count(*) into _n from public.calendar_sync_jobs where reservation_id = _futura;
+  assert _n = 1, format('Esperaba un solo trabajo, hay %s', _n);
+
+  -- Reconectar (revocar y volver) no duplica: la clave es la misma.
+  update public.calendar_connections set status = 'revocado' where user_id = _u;
+  update public.calendar_connections set status = 'conectado' where user_id = _u;
+
+  select count(*) into _n from public.calendar_sync_jobs where reservation_id = _futura;
+  assert _n = 1, format('Reconectar duplicó el trabajo: hay %s', _n);
+
+  -- Y si el trabajo había agotado sus intentos —el caso de quien
+  -- reconecta porque el token de Google había caducado—, reconectar lo
+  -- revive en lugar de dejarlo muerto.
+  update public.calendar_sync_jobs
+  set status = 'error', attempts = 5, last_error = 'token caducado',
+      dismissed_at = now()
+  where reservation_id = _futura;
+
+  update public.calendar_connections set status = 'revocado' where user_id = _u;
+  update public.calendar_connections set status = 'conectado' where user_id = _u;
+
+  assert (select status::text from public.calendar_sync_jobs where reservation_id = _futura)
+         = 'pendiente',
+    'Reconectar debería revivir el trabajo que había fallado';
+  assert (select attempts from public.calendar_sync_jobs where reservation_id = _futura) = 0,
+    'Al revivirlo, los intentos deberían volver a cero';
+  assert (select dismissed_at is null from public.calendar_sync_jobs where reservation_id = _futura),
+    'Un trabajo revivido no debería seguir descartado del informe';
+
+  -- Y queda constancia de la conexión con cuántas reservas arrastró.
+  assert exists (
+    select 1 from public.reservation_audit_log
+     where actor_id = _u and action = 'calendar_conectado'
+       and (details ->> 'reservas_encoladas')::int = 1
+  ), 'Falta la constancia de la conexión con las reservas encoladas';
+
+  raise notice 'OK · conectar el calendario arrastra las reservas futuras';
+end;
+$$;

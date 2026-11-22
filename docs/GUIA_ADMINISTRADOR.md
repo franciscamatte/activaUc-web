@@ -101,7 +101,15 @@ Aquí publicas la disponibilidad. Elige primero el recinto.
 El sistema impide crear dos bloques activos que empiecen a la misma hora en el
 mismo recinto.
 
-Los bloques se listan agrupados por día, del más reciente al más antiguo.
+Los bloques se listan agrupados por día, y arriba hay tres filtros:
+**Próximos** (lo que viene, en orden cronológico; es lo que se muestra por
+omisión), **Pasados** y **Todos**. Se cargan diez días a la vez, con un
+botón para mostrar más: una temporada publicada en serie son cientos de
+bloques y mostrarlos todos convierte la sección en un muro.
+
+Un bloque **que ya terminó** no se puede editar ni desactivar, y aparece
+marcado como «Pasado». Cambiarle la hora o la capacidad no afectaría a
+nada y sí confundiría el historial de las reservas que tuvo.
 
 **Editar un bloque**: puedes cambiar el horario y la capacidad. Si reduces la
 capacidad por debajo de las reservas ya confirmadas, **esas reservas se
@@ -111,11 +119,11 @@ otra vez. No se cancela nada automáticamente.
 **Desactivar un bloque**: deja de admitir nuevas reservas y desaparece del
 catálogo. Las existentes se conservan.
 
-#### Publicar disponibilidad de una semana
+#### Publicar disponibilidad de una temporada
 
-Hoy los bloques se crean uno a uno desde el panel. Para una carga semanal
-grande, el equipo técnico puede hacerlo por SQL en un solo paso; pídeselo
-indicando recinto, días, horas y capacidad.
+La pestaña **En serie** lo hace desde el panel: eliges el rango de fechas,
+las horas de inicio y los días de la semana, y antes de escribir nada te
+muestra una vista previa de cuántos bloques va a crear.
 
 ### Reservas
 

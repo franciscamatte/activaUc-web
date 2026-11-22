@@ -149,7 +149,32 @@ export class SupabaseRepository implements ActivaRepository {
     };
   }
 
+  /**
+   * Suscripción a los cambios de sesión.
+   *
+   * El oyente se invoca **fuera** del callback de `onAuthStateChange`, con
+   * un `setTimeout` de 0. No es un detalle de estilo: el cliente de
+   * Supabase ejecuta ese callback mientras tiene tomado su cerrojo
+   * interno de autenticación, así que cualquier llamada que acabe en
+   * `auth.getSession()` —y por ahí pasan `obtenerPerfil`,
+   * `obtenerConexionCalendario` y todo lo que exige sesión— espera un
+   * cerrojo que nadie va a liberar.
+   *
+   * Lo que se veía: al volver del consentimiento de Google, la consulta
+   * del estado de la conexión no devolvía nada ni lanzaba error, y la
+   * insignia se quedaba en «Consultando…» para siempre. El límite de
+   * tiempo de `conLimiteDeTiempo` convirtió ese cuelgue en un «Sin
+   * respuesta» visible; esto quita la causa.
+   *
+   * Aplazarlo aquí, y no en cada consumidor, es deliberado: la
+   * restricción es del cliente de Supabase, así que la esconde el
+   * adaptador que lo conoce.
+   */
   escucharSesion(oyente: OyenteSesion): () => void {
+    const avisar: OyenteSesion = (evento, sesion) => {
+      setTimeout(() => oyente(evento, sesion), 0);
+    };
+
     const { data } = this.cliente.auth.onAuthStateChange((evento, sesion) => {
       const actual: SesionActual | null = sesion?.user
         ? {
@@ -162,16 +187,16 @@ export class SupabaseRepository implements ActivaRepository {
       switch (evento) {
         case "SIGNED_IN":
         case "INITIAL_SESSION":
-          if (actual) oyente("iniciada", actual);
+          if (actual) avisar("iniciada", actual);
           break;
         case "TOKEN_REFRESHED":
-          oyente("renovada", actual);
+          avisar("renovada", actual);
           break;
         case "USER_UPDATED":
-          oyente("renovada", actual);
+          avisar("renovada", actual);
           break;
         case "SIGNED_OUT":
-          oyente("cerrada", null);
+          avisar("cerrada", null);
           break;
         default:
           break;

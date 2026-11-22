@@ -351,7 +351,10 @@ fallar; antes de descartar, comprueba que lo que falló ya está corregido.
 
 ### Resincronizar las reservas futuras de una persona
 
-Cuando alguien reconecta su calendario tras un error:
+**Normalmente no hace falta**: al conectar o reconectar el calendario, un
+disparador encola las reservas futuras sin evento y **revive** los
+trabajos que habían quedado en error. Esto queda para el caso en que la
+conexión ya estaba activa y hay que forzar la resincronización:
 
 ```sql
 insert into public.calendar_sync_jobs
