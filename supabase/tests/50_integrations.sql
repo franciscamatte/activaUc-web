@@ -181,8 +181,8 @@ begin
   perform public.fail_notification_job(_job.job_id, 'El proveedor rechazó la dirección', 'invalid_parameter', false);
   assert (select status from public.notification_messages where notification_job_id = _job.job_id) = 'fallido',
     'No se registró el mensaje como fallido';
-  assert (select error_code from public.notification_messages where notification_job_id = _job.job_id) = '63003',
-    'No se guardó el código de error de Twilio';
+  assert (select error_code from public.notification_messages where notification_job_id = _job.job_id) = 'invalid_parameter',
+    'No se guardó el código de error del proveedor';
   assert exists (
     select 1 from public.reservation_audit_log
     where reservation_id = _res and action = 'notificacion_fallida'

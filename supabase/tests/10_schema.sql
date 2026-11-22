@@ -106,12 +106,21 @@ begin
       and pg_get_constraintdef(oid) ilike '%+[1-9]%'
   ), 'Falta la restricción de formato E.164 en profiles.phone';
 
-  -- Consentimiento sin teléfono no debe ser posible.
+  -- El consentimiento de avisos no puede quedar sin su fecha: es lo que
+  -- permite demostrar cuándo se otorgó. No exige teléfono, porque los
+  -- avisos van por correo y la dirección es la de la cuenta.
   assert exists (
     select 1 from pg_constraint
     where conrelid = 'public.profiles'::regclass
+      and conname = 'profiles_email_consent_timestamp'
+  ), 'Falta la restricción consentimiento-requiere-fecha';
+
+  -- Y la del canal retirado ya no debe existir.
+  assert not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.profiles'::regclass
       and conname = 'profiles_consent_requires_phone'
-  ), 'Falta la restricción consentimiento-requiere-teléfono';
+  ), 'Quedó la restricción del consentimiento de un canal que ya no existe';
 
   raise notice 'OK · restricciones de datos personales presentes';
 end;

@@ -58,13 +58,10 @@ solicitud (igual que PostgREST en Supabase):
 1) Último cupo con 2 usuarios simultáneos (capacidad 1)
    ✔ exactamente 1 reserva creada
    ✔ el otro recibe "sin_cupos"
-2) 92 solicitudes concurrentes sobre capacidad 20
+2) 100 solicitudes concurrentes sobre capacidad 20
    ✔ reservas vigentes = 20 · cero sobrecupos
-   ✔ 72 rechazos por "sin_cupos" · cero duplicados · cero errores inesperados
+   ✔ 80 rechazos por "sin_cupos" · cero duplicados · cero errores inesperados
    ✔ 20 registros de auditoría
-   (92 porque el PostgreSQL local admitía 92 conexiones más; la
-    verificación automática lo arranca con max_connections=200 y corre
-    las 100 del requisito)
 3) El mismo usuario lanzando 10 solicitudes simultáneas
    ✔ una sola reserva vigente · 9 respuestas marcadas como duplicadas
 4) Carrera por el cupo liberado tras una cancelación
@@ -147,7 +144,7 @@ solicitud (igual que PostgREST en Supabase):
 
 | Requisito | Cómo se aborda | Evidencia |
 |---|---|---|
-| Elasticidad: 100 usuarios concurrentes sin degradar ni generar sobrecupos | Bloqueo por fila (no por tabla), índices sobre `block_id` y `next_attempt_at`, colas con `SKIP LOCKED` | `test:concurrency`: 92 solicitudes resueltas en 655 ms en local y 100 en la verificación automática, 0 sobrecupos. Cada solicitud simultánea abre una conexión, así que la prueba usa las que el servidor admita y avisa si fueron menos de 100 |
+| Elasticidad: 100 usuarios concurrentes sin degradar ni generar sobrecupos | Bloqueo por fila (no por tabla), índices sobre `block_id` y `next_attempt_at`, colas con `SKIP LOCKED` | `test:concurrency`: **100 solicitudes resueltas en 848 ms, 0 sobrecupos**. Cada solicitud simultánea abre su propia conexión, así que la prueba usa las que el servidor admita y **avisa** si fueron menos de 100; con `scripts/db-local.sh` y en la verificación automática caben las 100 |
 | Seguridad: contraseñas cifradas, HTTPS/TLS, llaves y tokens sólo en backend, mínimo privilegio | Supabase Auth gestiona las contraseñas; CloudFront fuerza HTTPS; tokens cifrados con AES-256-GCM y columnas sin privilegio de lectura; `REVOKE ALL` y concesiones explícitas por columna | `docs/SEGURIDAD.md`; `10_schema.sql` › «ninguna función de public es ejecutable por anon» |
 | Interoperabilidad: APIs oficiales REST/OAuth 2.0, ≥95 % de éxito | Clientes propios contra las APIs oficiales, con clasificación de errores transitorios y reintentos con retroceso | `googleCalendar.test.ts` (23 casos) y `brevoEmail.test.ts` (10 casos) |
 | Disponibilidad ≥99 % | Supabase gestionado + CloudFront; las integraciones degradan sin afectar la reserva | `docs/OPERACION.md` (monitoreo y recuperación) |

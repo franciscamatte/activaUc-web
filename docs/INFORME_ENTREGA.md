@@ -362,11 +362,11 @@ apliquen limpiamente sobre una base vacía.
 
 ```
 1) Último cupo con 2 usuarios simultáneos .......... 1 reserva, 1 "sin_cupos"
-2) 92 solicitudes sobre capacidad 20 .............. 20 reservas en 655 ms
+2) 100 solicitudes sobre capacidad 20 ............. 20 reservas en 848 ms
                                                      0 sobrecupos, 0 duplicados
                                                      0 errores, 20 auditorías
-   (92 y no 100 porque el PostgreSQL local admite 92 conexiones más;
-    la verificación automática lo arranca con max_connections=200)
+   (las 100 del requisito: el cluster de scripts/db-local.sh arranca
+    con max_connections=200, igual que el de la verificación automática)
 3) 10 solicitudes del mismo usuario a la vez ...... 1 reserva, 9 duplicadas
 4) Carrera de 10 por el cupo liberado ............. 1 gana
 5) 30 solicitudes sobre bloque agotado ............ 0 éxitos, 30 mensajes claros

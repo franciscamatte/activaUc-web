@@ -76,14 +76,28 @@ npm run test:db
 Un PostgreSQL accesible. Cualquiera de estas opciones:
 
 ```bash
-# A · Supabase local (requiere Docker)
+# A · Un PostgreSQL propio, sin sudo y sin Docker (lo más fiable)
+bash scripts/db-local.sh start
+export ACTIVAUC_TEST_DB_URL="$(bash scripts/db-local.sh url)"
+npm run test:db
+
+# B · Supabase local (requiere Docker)
 npx supabase start
 npm run test:db
 
-# B · Cualquier PostgreSQL 15+
+# C · Cualquier PostgreSQL 15+ al que ya tengas acceso
 ACTIVAUC_TEST_DB_URL="postgresql://postgres:postgres@127.0.0.1:5432/postgres" \
   npm run test:db
 ```
+
+La opción A existe porque las otras dos fallan con facilidad: Docker
+Desktop puede tener la integración con WSL apagada, y el cluster del
+sistema suele pedir una contraseña distinta de la que se supone, que
+cambiarla exige `sudo`. `db-local.sh` crea un cluster **en la carpeta
+del usuario**, en el puerto 54329 y con `max_connections=200` —el valor
+que la prueba de concurrencia necesita para las 100 solicitudes del
+requisito de elasticidad—, sin tocar nada del sistema. `stop`, `status`
+y `destroy` hacen lo que dicen.
 
 Si no hay base disponible, el script lo dice con instrucciones en lugar de
 fallar con un error de conexión en bruto.
@@ -188,7 +202,7 @@ pide el requisito.
 
 ### Resultado de la última ejecución
 
-Contra PostgreSQL 16 local, que admitió 92 conexiones simultáneas:
+Contra el PostgreSQL 16 de `scripts/db-local.sh`, con sitio para las 100:
 
 ```
 1) Último cupo con 2 usuarios simultáneos (capacidad 1)
@@ -196,12 +210,12 @@ Contra PostgreSQL 16 local, que admitió 92 conexiones simultáneas:
   ✔ el otro recibe "sin_cupos" (obtenido: 1)
   ✔ reservas vigentes = 1, capacidad = 1 (obtenido: 1)
 
-2) 92 solicitudes concurrentes sobre capacidad 20
-  92 solicitudes en 655 ms
+2) 100 solicitudes concurrentes sobre capacidad 20
+  100 solicitudes en 848 ms
   ✔ reservas vigentes = 20 (obtenido: 20)
   ✔ cero sobrecupos
   ✔ 20 solicitudes exitosas (obtenido: 20)
-  ✔ 72 rechazos por "sin_cupos" (obtenido: 72)
+  ✔ 80 rechazos por "sin_cupos" (obtenido: 80)
   ✔ cero usuarios con reserva duplicada (obtenido: 0)
   ✔ cero errores inesperados (obtenido: 0)
   ✔ 20 registros de auditoría (obtenido: 20)

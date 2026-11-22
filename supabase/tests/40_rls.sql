@@ -410,13 +410,6 @@ begin
     when insufficient_privilege then null;
   end;
 
-  begin
-    perform public.apply_notification_status('SM1', 'delivered', null);
-    assert false, 'Un usuario pudo forzar el estado de un mensaje';
-  exception
-    when insufficient_privilege then null;
-  end;
-
   -- Los contadores de rate limiting y los webhooks no son legibles.
   begin
     perform count(*) from public.rate_limit_counters;
