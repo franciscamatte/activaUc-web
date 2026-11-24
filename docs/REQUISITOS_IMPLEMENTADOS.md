@@ -274,6 +274,11 @@ por el flujo normal. El aviso no asegura el cupo.
 - `block_watchers` registra quién espera qué bloque. Una solicitud se
   **consume** al avisarse, de modo que no se avisa indefinidamente a
   quien ya perdió el interés.
+- Volver a pedirla entrega una solicitud **nueva**, con id nuevo, que es
+  de donde el disparador deriva la clave de idempotencia del aviso.
+  Conservar el id haría que el segundo aviso de un mismo bloque chocara
+  con la clave del primero y se descartara, consumiendo la espera sin
+  enviar nada.
 - Sólo se acepta sobre bloques llenos, futuros y en los que la persona no
   tenga ya reserva. Con cupo libre se responde que puede reservar.
 - Un disparador por sentencia sobre `reservations` detecta las

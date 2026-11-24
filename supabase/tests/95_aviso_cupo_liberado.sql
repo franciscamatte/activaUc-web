@@ -218,3 +218,115 @@ begin
   raise notice 'OK · cada persona gestiona sólo sus propias solicitudes';
 end;
 $$;
+
+do $$
+declare
+  _a uuid; _b uuid; _fac uuid; _bloque uuid; _r jsonb; _id1 uuid; _id2 uuid;
+begin
+  -- La invariante de la que depende la clave del aviso: reabrir una
+  -- espera entrega una solicitud nueva, con id nuevo, sin duplicar la
+  -- fila. Si esto deja de cumplirse, el segundo aviso de un bloque se
+  -- descarta por choque de clave de idempotencia.
+  _a := test_helpers.create_user('w12@uc.cl', 'Wendel Doce');
+  _b := test_helpers.create_user('w13@uc.cl', 'Wivian Trece');
+
+  insert into public.facilities (name, facility_type) values ('Recinto Reabre', 'Tenis')
+  returning id into _fac;
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '8 hours', now() + interval '9 hours', 1)
+  returning id into _bloque;
+
+  perform test_helpers.login_as(_a);
+  perform public.create_reservation_strict(_bloque);
+
+  perform test_helpers.login_as(_b);
+  _r := public.solicitar_aviso_de_cupo(_bloque);
+  assert (_r ->> 'ok')::boolean, format('El aviso debería aceptarse: %s', _r);
+  select id into _id1 from public.block_watchers
+  where block_id = _bloque and user_id = _b;
+
+  -- Pedirlo otra vez no añade una espera: reabre la que hay.
+  _r := public.solicitar_aviso_de_cupo(_bloque);
+  assert (_r ->> 'ok')::boolean, format('Reabrir el aviso debería aceptarse: %s', _r);
+  assert (select count(*) from public.block_watchers
+          where block_id = _bloque and user_id = _b) = 1,
+    'Reabrir la espera no debería duplicar la fila';
+
+  select id into _id2 from public.block_watchers
+  where block_id = _bloque and user_id = _b;
+  assert _id2 is distinct from _id1,
+    'Reabrir la espera debería entregar una solicitud con id nuevo';
+  assert (select notified_at is null from public.block_watchers
+          where block_id = _bloque and user_id = _b),
+    'La espera reabierta debería quedar pendiente';
+
+  raise notice 'OK · reabrir una espera entrega una solicitud nueva';
+end;
+$$;
+
+do $$
+declare
+  _a uuid; _b uuid; _c uuid; _fac uuid; _bloque uuid; _r jsonb;
+  _res_a uuid; _res_c uuid;
+begin
+  -- El caso que estaba roto: pedir el aviso de nuevo después de haberlo
+  -- recibido tiene que volver a avisar. Antes el encolado chocaba con la
+  -- clave del primer aviso y se descartaba en silencio, consumiendo la
+  -- espera sin enviar nada.
+  _a := test_helpers.create_user('w14@uc.cl', 'Wilfredo Catorce');
+  _b := test_helpers.create_user('w15@uc.cl', 'Wania Quince');
+  _c := test_helpers.create_user('w16@uc.cl', 'Waldo Dieciséis');
+
+  insert into public.facilities (name, facility_type) values ('Recinto Dos Avisos', 'Fútbol')
+  returning id into _fac;
+  insert into public.time_blocks (facility_id, starts_at, ends_at, max_capacity)
+  values (_fac, now() + interval '8 hours', now() + interval '9 hours', 1)
+  returning id into _bloque;
+
+  perform test_helpers.login_as(_a);
+  _r := public.create_reservation_strict(_bloque);
+  _res_a := (_r ->> 'reservation_id')::uuid;
+
+  perform test_helpers.login_as(_b);
+  perform public.set_email_consent(true);
+  perform public.solicitar_aviso_de_cupo(_bloque);
+
+  -- Primera liberación: llega el primer aviso y la espera se consume.
+  perform test_helpers.login_as(_a);
+  perform public.cancel_reservation(_res_a);
+  assert (select count(*) from public.notification_jobs
+          where user_id = _b and kind::text = 'cupo_liberado') = 1,
+    'No se encoló el primer aviso';
+
+  -- El bloque se vuelve a llenar y la persona vuelve a pedir el aviso.
+  perform test_helpers.login_as(_c);
+  _r := public.create_reservation_strict(_bloque);
+  _res_c := (_r ->> 'reservation_id')::uuid;
+  assert (_r ->> 'ok')::boolean, format('La segunda reserva falló: %s', _r);
+
+  perform test_helpers.login_as(_b);
+  _r := public.solicitar_aviso_de_cupo(_bloque);
+  assert (_r ->> 'ok')::boolean, format('Volver a pedir el aviso debería aceptarse: %s', _r);
+
+  -- Segunda liberación: tiene que llegar un segundo aviso, con clave
+  -- propia, y no volver a descartarse.
+  perform test_helpers.login_as(_c);
+  perform public.cancel_reservation(_res_c);
+
+  assert (select count(*) from public.notification_jobs
+          where user_id = _b and kind::text = 'cupo_liberado') = 2,
+    'El segundo aviso no se encoló: la espera se consumió sin enviar nada';
+  assert (select count(distinct idempotency_key) from public.notification_jobs
+          where user_id = _b and kind::text = 'cupo_liberado') = 2,
+    'Los dos avisos deberían tener claves de idempotencia distintas';
+  assert (select count(*) from public.notification_jobs
+          where user_id = _b and kind::text = 'cupo_liberado'
+            and block_id = _bloque) = 2,
+    'Los dos avisos deberían apuntar al mismo bloque';
+  assert (select notified_at is not null from public.block_watchers
+          where block_id = _bloque and user_id = _b),
+    'La segunda espera también debería quedar consumida';
+
+  raise notice 'OK · volver a pedir el aviso vuelve a avisar';
+end;
+$$;

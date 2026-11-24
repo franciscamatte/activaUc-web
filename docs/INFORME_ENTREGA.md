@@ -172,7 +172,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 
 | Archivo | Por qué |
 |---|---|
-| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 15 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba el mensaje como «enviado» sin enviar nada |
+| `supabase/migrations/20261015133000_activauc_schema.sql` | Reemplazado por las 16 migraciones actuales. La original tenía un `SELECT count(*) ... FOR UPDATE`, que PostgreSQL rechaza, y marcaba el mensaje como «enviado» sin enviar nada |
 | `supabase/functions/process-integrations/index.ts` | Reemplazado por los dos workers y `cron-dispatch` |
 | `src/state/AppProvider.tsx` | Reemplazado por `AuthProvider` + hooks |
 | `src/lib/date.ts`, `src/services/retry.ts`, `src/services/retry.test.ts` | Reemplazados por `lib/format.ts` y `lib/retry.ts` |
@@ -200,6 +200,7 @@ docs/{GUIA_USUARIO,GUIA_ADMINISTRADOR,INFORME_ENTREGA}.md
 | `20261121000100_retirar_whatsapp.sql` | 1175 | Retirada del canal de WhatsApp: `whatsapp_messages` pasa a `notification_messages` conservando su historial, el canal queda restringido a `email` con una restricción `NOT VALID` —una validada fallaría por las filas históricas—, se van el consentimiento de WhatsApp y las dos funciones del canal, y el teléfono pasa a actualizarse por privilegio de columna (REQ-7) |
 | `20261122000100_calendario_al_conectar.sql` | 114 | Al conectar el calendario, encola las reservas futuras que aún no tienen evento (REQ-18, REQ-20). Un `do update` y no un `do nothing`: el caso que importa es el del trabajo que ya existía y falló por un token caducado, que así se revive en lugar de quedarse muerto |
 | `20261122000200_revivir_cancelados_al_conectar.sql` | 92 | Al reconectar, revivir también los trabajos que la **desconexión** canceló, no sólo los que fallaron. Desconectar y volver a conectar es justo lo que hace quien ve su calendario desactualizado, y era el único camino que no reparaba nada |
+| `20261124000100_reabrir_aviso_de_cupo.sql` | 133 | Volver a pedir el aviso de cupo vuelve a avisar (SC-2): reabrir una espera entrega una solicitud con `id` nuevo, que es de donde el disparador deriva la clave de idempotencia del envío. Antes el `do update` conservaba el id, así que el segundo aviso de un mismo bloque chocaba con la clave del primero y se descartaba en silencio mientras la espera se consumía igual |
 
 Las 14 tablas: `profiles`, `facilities`, `time_blocks`,
 `facility_admin_assignments`, `reservations`, `reservation_audit_log`,
